@@ -27,7 +27,7 @@ function NewPool() {
       setLastName(n);
       const { id } = await api.createPool({ packCount, createdBy: n });
       setIdentity(id, await api.join(id, n));
-      nav(`/p/${id}/build?new=1`);
+      nav(`/p/${id}/build`);
     } catch (err: any) {
       setError(err.message);
       setBusy(false);

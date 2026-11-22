@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import { api } from '../api.ts';
-import { getIdentity, resumeUrl } from '../identity.ts';
+import { getIdentity } from '../identity.ts';
 import { COLORS, COLOR_NAMES, type Color, type Layout, type PoolCard, type PoolWithDecks } from '../../../shared/types.ts';
 import { BASIC_NAMES, basicsCount, cardColors, curveBucket, exportDecklist, isCreature, isLand, totalPips } from '../../../shared/cards.ts';
 import {
@@ -107,6 +107,25 @@ function hitTest(x: number, y: number, layout: Layout): DropHint | null {
   return { zone, col, index, lineTop };
 }
 
+/** Card width the zone heights are sized for; bigger cards scroll inside the zones instead of growing them. */
+const BASE_CARD_W = typeof window !== 'undefined' && window.innerWidth < 640 ? 96 : 128;
+const MAX_CARD_W = 240;
+function readCardSize() {
+  try {
+    const v = Number(localStorage.getItem('st:cardW'));
+    if (v >= BASE_CARD_W && v <= MAX_CARD_W) return v;
+  } catch {
+    /* storage unavailable */
+  }
+  return BASE_CARD_W;
+}
+/** Height a row of piles needs at the base card size. */
+function zoneHeight(pileSizes: number[], minimum: number) {
+  const w = BASE_CARD_W;
+  const pile = (n: number) => 24 + w * 1.3934 + Math.max(0, n - 1) * w * 0.2004 + 4;
+  return Math.ceil(Math.max(minimum, ...pileSizes.map(pile))) + 22;
+}
+
 interface DragState {
   uid: string;
   startX: number;
@@ -118,9 +137,31 @@ interface DragState {
   active: boolean;
 }
 
+/** A "Sort by…" menu that re-sorts every time an option is picked (even the same one again). */
+function SortSelect({ label, options, onSort }: { label: string; options: [SortMode, string][]; onSort: (m: SortMode) => void }) {
+  return (
+    <select
+      className="sort-select"
+      value=""
+      aria-label={label}
+      onChange={(e) => {
+        if (e.target.value) onSort(e.target.value as SortMode);
+      }}
+    >
+      <option value="" disabled>
+        Sort by…
+      </option>
+      {options.map(([v, l]) => (
+        <option key={v} value={v}>
+          {l}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export default function Builder() {
   const { poolId = '' } = useParams();
-  const [params] = useSearchParams();
   const me = getIdentity(poolId);
   const [pool, setPool] = useState<PoolWithDecks | null>(null);
   const [meta, setMeta] = useState<DeckMeta | null>(null);
@@ -138,7 +179,8 @@ export default function Builder() {
   const layoutRef = useRef<Layout | null>(null);
   const suppressClick = useRef(false);
   layoutRef.current = layout;
-  const [showWelcome, setShowWelcome] = useState(params.has('new'));
+  const [deckMode, setDeckMode] = useState<SortMode>('cmc');
+  const [cardW, setCardW] = useState(readCardSize);
   const loaded = useRef(false);
 
   useEffect(() => {
@@ -244,6 +286,18 @@ export default function Builder() {
         window.scrollBy(0, dy);
         updateHint();
       }
+      // Also scroll a deck/sideboard area when the pointer nears its edges (cards may be larger than the area).
+      const sc = document.elementFromPoint(d.x, d.y)?.closest('.columns') as HTMLElement | null;
+      if (sc) {
+        const r = sc.getBoundingClientRect();
+        const inner = 40;
+        const sy = d.y < r.top + inner ? -6 : d.y > r.bottom - inner ? 6 : 0;
+        const sx = d.x < r.left + inner ? -6 : d.x > r.right - inner ? 6 : 0;
+        if (sx || sy) {
+          sc.scrollBy(sx, sy);
+          updateHint();
+        }
+      }
       raf = requestAnimationFrame(autoScroll);
     };
     const move = (ev: PointerEvent) => {
@@ -291,9 +345,24 @@ export default function Builder() {
   };
   const clickSideCard = (c: PoolCard) => {
     if (suppressClick.current) return;
-    setLayout(placeCard(layout, 'deck', c, 'cmc', getCard));
+    setLayout(placeCard(layout, 'deck', c, deckMode, getCard));
   };
-  const addBasic = (col: Color) => setLayout(placeCard(layout, 'deck', basicCard(pool, nextBasicId(layout, col)), 'cmc', getCard));
+  const addBasic = (col: Color) => setLayout(placeCard(layout, 'deck', basicCard(pool, nextBasicId(layout, col)), deckMode, getCard));
+  const clearDeck = () => {
+    if (!confirm(`Move all ${total} cards in your deck back to the sideboard? Basic lands will be removed.`)) return;
+    let next: Layout = { deck: [], side: layout.side };
+    for (const u of deckUids) if (!isBasicId(u)) next = placeCard(next, 'side', getCard(u), sideMode, getCard);
+    setLayout(next);
+  };
+  const changeCardSize = (w: number) => {
+    setCardW(w);
+    try {
+      localStorage.setItem('st:cardW', String(w));
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  const sidePiles = layout.side.map((col) => col.filter(shownInSide));
   const removeBasic = (col: Color) => {
     const last = [...deckUids].reverse().find((u) => basicColor(u) === col);
     if (last) setLayout(removeCard(layout, last));
@@ -331,7 +400,7 @@ export default function Builder() {
   const poolUrl = `${location.origin}/p/${poolId}`;
 
   return (
-    <main className={`builder ${dragging ? 'is-dragging' : ''}`}>
+    <main className={`builder ${dragging ? 'is-dragging' : ''}`} style={{ '--card-w': `${cardW}px` } as React.CSSProperties}>
       {ghostCard && (
         <div
           className="drag-ghost"
@@ -349,6 +418,10 @@ export default function Builder() {
             {pool.setName} · building as <b>{meta.playerName}</b>
           </span>
           <CopyButton text={poolUrl} label="Copy pool link" className="btn" />
+          <label className="size-slider">
+            Card size
+            <input type="range" min={BASE_CARD_W} max={MAX_CARD_W} step={4} value={cardW} onChange={(e) => changeCardSize(Number(e.target.value))} />
+          </label>
         </div>
         <div className="bar-right">
           <span className={`save-state ${save}`}>{locked ? 'Submitted' : saveLabel}</span>
@@ -366,14 +439,6 @@ export default function Builder() {
         </div>
       </div>
 
-      {showWelcome && (
-        <div className="callout callout-row">
-          <span>
-            <b>Your pool is open.</b> Use <b>Copy pool link</b> to invite others. Everyone builds from these same cards.
-          </span>
-          <button className="btn small" onClick={() => setShowWelcome(false)}>Got it</button>
-        </div>
-      )}
       {locked && (
         <div className="callout">
           Your deck is submitted and visible to others who’ve submitted. Choosing Edit hides it from the comparison until you submit again.
@@ -388,15 +453,25 @@ export default function Builder() {
                 Deck <span className={`count ${total === 40 ? 'ok' : ''}`}>{total}/40</span>
               </h2>
               <span className="muted small">
-                {spells.length} spells · {nonbasicLands + basicTotal} lands · drag cards anywhere to rearrange · click to send to sideboard
+                {spells.length} spells · {nonbasicLands + basicTotal} lands
               </span>
               {!locked && deckUids.length > 0 && (
-                <button className="btn small" type="button" onClick={() => setLayout({ ...layout, deck: sortedColumns(deckUids.map(getCard), 'cmc') })}>
-                  Sort by mana value
-                </button>
+                <div className="zone-actions">
+                  <SortSelect
+                    label="Sort deck"
+                    options={[['cmc', 'Mana value'], ['color', 'Color']]}
+                    onSort={(mode) => {
+                      setDeckMode(mode);
+                      setLayout({ ...layout, deck: sortedColumns(deckUids.map(getCard), mode) });
+                    }}
+                  />
+                  <button className="btn small" type="button" onClick={clearDeck}>
+                    Clear
+                  </button>
+                </div>
               )}
             </div>
-            <div className="columns">
+            <div className="columns" style={{ height: zoneHeight(layout.deck.map((c) => c.length), 150) }}>
               {layout.deck.map((col, i) => (
                 <Pile key={i} zone="deck" col={i} visible={col} onCardClick={clickDeckCard} {...pileProps} />
               ))}
@@ -435,20 +510,16 @@ export default function Builder() {
                   )}
                 </div>
                 <input type="search" placeholder="Search name, type, text" value={search} onChange={(e) => setSearch(e.target.value)} />
-                <select
-                  value={sideMode}
-                  disabled={locked}
-                  aria-label="Sort sideboard"
-                  onChange={(e) => {
-                    const mode = e.target.value as SortMode;
-                    setSideMode(mode);
-                    setLayout({ ...layout, side: sortedColumns(sideCards, mode) });
-                  }}
-                >
-                  <option value="color">Sort by color</option>
-                  <option value="cmc">Sort by mana value</option>
-                  <option value="type">Sort by type</option>
-                </select>
+                {!locked && (
+                  <SortSelect
+                    label="Sort sideboard"
+                    options={[['color', 'Color'], ['cmc', 'Mana value']]}
+                    onSort={(mode) => {
+                      setSideMode(mode);
+                      setLayout({ ...layout, side: sortedColumns(sideCards, mode) });
+                    }}
+                  />
+                )}
               </div>
             </div>
             {(filter.size > 0 || q) && (
@@ -457,9 +528,9 @@ export default function Builder() {
                 {hiddenCount} hidden
               </p>
             )}
-            <div className="columns">
+            <div className="columns" style={{ height: zoneHeight(sidePiles.map((c) => c.length), 150) }}>
               {layout.side.map((col, i) => {
-                const visible = col.filter(shownInSide);
+                const visible = sidePiles[i];
                 return visible.length ? <Pile key={i} zone="side" col={i} visible={visible} onCardClick={clickSideCard} {...pileProps} /> : null;
               })}
               <NewPile zone="side" at={layout.side.length} dragging={dragging} hint={hint} />
@@ -518,11 +589,6 @@ export default function Builder() {
               placeholder="Why this build? Shared with the others once everyone can compare."
               onChange={(e) => setMeta({ ...meta, notes: e.target.value })}
             />
-            <details className="resume">
-              <summary>Continue on another device</summary>
-              <p className="muted small">This private link opens your deck anywhere. Don’t share it — it lets anyone edit your deck.</p>
-              <CopyButton text={resumeUrl(poolId, me)} label="Copy private link" className="btn small" />
-            </details>
           </section>
         </aside>
       </div>

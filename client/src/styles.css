@@ -289,7 +289,12 @@ button.card-tile { cursor: pointer; }
 .pip-toggle.on { opacity: 1; border-color: var(--accent); background: var(--accent-soft); }
 .pip-toggle:hover { opacity: 1; }
 .filter-note { margin: -0.4rem 0 0.6rem; }
-.columns { display: flex; gap: 0.6rem; overflow-x: auto; padding: 2px 2px 0.5rem; }
+.columns { display: flex; gap: 0.6rem; overflow: auto; padding: 2px 2px 0.5rem; }
+.zone .columns { overscroll-behavior: contain; }
+.zone-actions { display: flex; gap: 0.5rem; align-items: center; margin-left: auto; }
+.sort-select { width: auto; padding: 0.3rem 0.5rem; font-size: 0.85rem; }
+.size-slider { flex-direction: row; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.85rem; color: var(--muted); }
+.size-slider input { width: 7rem; padding: 0; accent-color: var(--accent); }
 .column { flex: none; width: var(--card-w); }
 .column-head { font-size: 0.78rem; font-weight: 700; color: var(--ink-2); margin-bottom: 0.35rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stack { display: flex; flex-direction: column; }
@@ -298,7 +303,7 @@ button.card-tile { cursor: pointer; }
 /* Drag and drop */
 .stack { position: relative; }
 .columns { align-items: stretch; }
-.pile { border-radius: 8px; padding: 2px; margin: -2px; min-height: 100%; }
+.pile { border-radius: 8px; padding: 2px; margin: -2px; min-height: 100%; height: max-content; }
 .pile.drop-active { background: var(--accent-soft); }
 .drop-line { position: absolute; left: -2px; right: -2px; height: 4px; border-radius: 2px; background: var(--accent); pointer-events: none; z-index: 5; }
 .card-tile.dragging { opacity: 0.35; }
