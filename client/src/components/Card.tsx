@@ -7,17 +7,19 @@ interface Props {
   label?: string;
   badge?: React.ReactNode;
   dim?: boolean;
+  /** Makes the card draggable (HTML drag and drop). */
+  drag?: { onDragStart: (e: React.DragEvent) => void; onDragEnd: (e: React.DragEvent) => void; dragging?: boolean };
 }
 
 /** A single card image (with text fallback) that shows the large preview on hover. */
-export function CardTile({ card, onClick, label, badge, dim }: Props) {
+export function CardTile({ card, onClick, label, badge, dim, drag }: Props) {
   const { show, hide } = usePreview();
   const inner = card.image ? (
     <img src={card.image} alt={card.name} loading="lazy" draggable={false} />
   ) : (
     <TextCard card={card} />
   );
-  const cls = `card-tile rarity-${card.rarity} ${card.foil ? 'foil' : ''} ${dim ? 'dim' : ''}`;
+  const cls = `card-tile rarity-${card.rarity} ${card.foil ? 'foil' : ''} ${dim ? 'dim' : ''} ${drag?.dragging ? 'dragging' : ''}`;
   const events = {
     onPointerEnter: (e: React.PointerEvent) => show(card, e),
     onPointerMove: (e: React.PointerEvent) => show(card, e),
@@ -33,6 +35,15 @@ export function CardTile({ card, onClick, label, badge, dim }: Props) {
         hide();
         onClick();
       }}
+      draggable={!!drag}
+      onDragStart={
+        drag &&
+        ((e) => {
+          hide();
+          drag.onDragStart(e);
+        })
+      }
+      onDragEnd={drag?.onDragEnd}
       {...events}
     >
       {inner}

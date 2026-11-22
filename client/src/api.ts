@@ -1,4 +1,4 @@
-import type { Basics, BoosterType, Deck, PoolWithDecks, SetInfo } from '../../shared/types.ts';
+import type { Basics, Deck, Layout, PoolListItem, PoolWithDecks, SetInfo } from '../../shared/types.ts';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -20,14 +20,15 @@ export interface DeckUpdate {
   main?: string[];
   basics?: Basics;
   notes?: string;
+  layout?: Layout;
   playerName?: string;
   submitted?: boolean;
 }
 
 export const api = {
-  sets: () => call<SetInfo[]>('GET', '/sets'),
-  createPool: (b: { setCode: string; boosterType: BoosterType; packCount: number; createdBy: string }) =>
-    call<{ id: string }>('POST', '/pools', b),
+  config: () => call<{ set: SetInfo; boosterType: 'play' }>('GET', '/config'),
+  pools: () => call<PoolListItem[]>('GET', '/pools'),
+  createPool: (b: { packCount: number; createdBy: string }) => call<{ id: string }>('POST', '/pools', b),
   pool: (id: string) => call<PoolWithDecks>('GET', `/pools/${id}`),
   join: (poolId: string, playerName: string) =>
     call<{ deckId: string; token: string; playerName: string }>('POST', `/pools/${poolId}/decks`, { playerName }),

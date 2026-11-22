@@ -7,7 +7,7 @@ import { card } from './fixtures.ts';
 const pc = (uid: string, p: Parameters<typeof card>[0]): PoolCard => ({ ...card(p), uid, foil: false, pack: 1 });
 
 const pool: Pool = {
-  id: 'p', setCode: 'tst', setName: 'Test', boosterType: 'play', packCount: 1, createdBy: 'a', createdAt: '',
+  id: 'p', setCode: 'tst', setName: 'Test', boosterType: 'play', packCount: 1, createdBy: 'a', createdAt: '', basicLands: {},
   cards: [
     pc('1', { name: 'Bear', colors: ['G'], manaCost: '{1}{G}', cmc: 2 }),
     pc('2', { name: 'Bear', colors: ['G'], manaCost: '{1}{G}', cmc: 2 }),
@@ -17,7 +17,7 @@ const pool: Pool = {
   ],
 };
 const deck = (id: string, main: string[], basics = emptyBasics()): Deck => ({
-  id, poolId: 'p', playerName: id.toUpperCase(), main, basics, notes: '', submittedAt: 'x', updatedAt: 'x',
+  id, poolId: 'p', playerName: id.toUpperCase(), main, basics, notes: '', layout: null, submittedAt: 'x', updatedAt: 'x',
 });
 
 describe('cards helpers', () => {

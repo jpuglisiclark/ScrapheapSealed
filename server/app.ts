@@ -4,11 +4,13 @@ import path from 'node:path';
 import fs from 'node:fs';
 import type { DB } from './db.ts';
 import { generatePool } from '../shared/booster.ts';
-import { COLORS, emptyBasics, type Basics, type BoosterType, type CardTemplate, type Deck, type DeckSummary, type Pool, type SetInfo } from '../shared/types.ts';
+import { COLORS, emptyBasics, type Basics, type BasicLands, type CardTemplate, type Deck, type DeckSummary, type Pool, type PoolListItem, type SetInfo } from '../shared/types.ts';
+import { sanitizeLayout } from '../shared/layout.ts';
 
 export interface CardSource {
   fetchSets(): Promise<SetInfo[]>;
   fetchSetCards(code: string): Promise<CardTemplate[]>;
+  fetchBasics(code: string): Promise<BasicLands>;
 }
 
 export interface AppOptions {
@@ -16,6 +18,8 @@ export interface AppOptions {
   cards: CardSource;
   staticDir?: string;
   setCacheMs?: number;
+  /** The only set pools are opened from. */
+  setCode?: string;
 }
 
 const id = (bytes = 6) => crypto.randomBytes(bytes).toString('base64url');
@@ -39,7 +43,7 @@ function tokensMatch(a: string, b: string) {
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 }
 
-export function createApp({ db, cards, staticDir, setCacheMs = 7 * 24 * 3600 * 1000 }: AppOptions) {
+export function createApp({ db, cards, staticDir, setCacheMs = 7 * 24 * 3600 * 1000, setCode = 'trk' }: AppOptions) {
   const app = express();
   app.use(express.json({ limit: '200kb' }));
 
@@ -51,6 +55,7 @@ export function createApp({ db, cards, staticDir, setCacheMs = 7 * 24 * 3600 * 1
     main: JSON.parse(r.main),
     basics: JSON.parse(r.basics),
     notes: r.notes,
+    layout: r.layout ? JSON.parse(r.layout) : null,
     submittedAt: r.submitted_at,
     updatedAt: r.updated_at,
   });
@@ -67,6 +72,7 @@ export function createApp({ db, cards, staticDir, setCacheMs = 7 * 24 * 3600 * 1
       createdBy: r.created_by,
       createdAt: r.created_at,
       cards: JSON.parse(r.cards),
+      basicLands: JSON.parse(r.basic_lands ?? '{}'),
     };
   }
 
@@ -95,35 +101,58 @@ export function createApp({ db, cards, staticDir, setCacheMs = 7 * 24 * 3600 * 1
     return setsCache.sets;
   }
 
-  async function getSetCards(code: string): Promise<CardTemplate[]> {
-    const r: any = db.prepare('SELECT * FROM set_cache WHERE code = ?').get(code);
+  async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
+    const r: any = db.prepare('SELECT * FROM set_cache WHERE code = ?').get(key);
     if (r && Date.now() - r.fetched_at < setCacheMs) return JSON.parse(r.data);
-    const list = await cards.fetchSetCards(code);
-    db.prepare('INSERT OR REPLACE INTO set_cache (code, fetched_at, data) VALUES (?, ?, ?)').run(code, Date.now(), JSON.stringify(list));
-    return list;
+    const value = await load();
+    db.prepare('INSERT OR REPLACE INTO set_cache (code, fetched_at, data) VALUES (?, ?, ?)').run(key, Date.now(), JSON.stringify(value));
+    return value;
+  }
+
+  async function currentSet(): Promise<SetInfo> {
+    const set = (await getSets()).find((s) => s.code === setCode);
+    if (!set) throw new HttpError(500, `Set ${setCode.toUpperCase()} is not available`);
+    return set;
   }
 
   const wrap = (fn: (req: Request, res: Response) => unknown) => (req: Request, res: Response, next: NextFunction) =>
     Promise.resolve(fn(req, res)).catch(next);
 
   // ---- routes ------------------------------------------------------------
-  app.get('/api/sets', wrap(async (_req, res) => res.json(await getSets())));
+  app.get('/api/config', wrap(async (_req, res) => res.json({ set: await currentSet(), boosterType: 'play' })));
+
+  app.get(
+    '/api/pools',
+    wrap((_req, res) => {
+      const pools = db.prepare('SELECT id, set_code, set_name, created_by, created_at FROM pools ORDER BY created_at DESC LIMIT 200').all() as any[];
+      const decks = db.prepare('SELECT id, pool_id, player_name, submitted_at FROM decks ORDER BY created_at').all() as any[];
+      const out: PoolListItem[] = pools.map((p) => ({
+        id: p.id,
+        setCode: p.set_code,
+        setName: p.set_name,
+        createdBy: p.created_by,
+        createdAt: p.created_at,
+        players: decks.filter((d) => d.pool_id === p.id).map((d) => ({ deckId: d.id, playerName: d.player_name, submitted: !!d.submitted_at })),
+      }));
+      res.json(out);
+    }),
+  );
 
   app.post(
     '/api/pools',
     wrap(async (req, res) => {
-      const { setCode, boosterType = 'play', packCount = 6, createdBy } = req.body ?? {};
+      const { packCount = 6, createdBy } = req.body ?? {};
       const name = cleanName(createdBy, 'Your name');
-      if (!['play', 'draft'].includes(boosterType)) throw new HttpError(400, 'Unknown booster type');
       const packs = Number(packCount);
       if (!Number.isInteger(packs) || packs < 1 || packs > 12) throw new HttpError(400, 'Pack count must be 1–12');
-      const set = (await getSets()).find((s) => s.code === setCode);
-      if (!set) throw new HttpError(400, 'Unknown set');
-      const pool = generatePool(await getSetCards(set.code), boosterType as BoosterType, packs);
+      const set = await currentSet();
+      const setCards = await cached(set.code, () => cards.fetchSetCards(set.code));
+      const basicLands = await cached(`basics:${set.code}`, () => cards.fetchBasics(set.code));
+      const pool = generatePool(setCards, 'play', packs);
       const poolId = id();
       db.prepare(
-        'INSERT INTO pools (id, set_code, set_name, booster_type, pack_count, created_by, created_at, cards) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run(poolId, set.code, set.name, boosterType, packs, name, now(), JSON.stringify(pool));
+        'INSERT INTO pools (id, set_code, set_name, booster_type, pack_count, created_by, created_at, cards, basic_lands) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      ).run(poolId, set.code, set.name, 'play', packs, name, now(), JSON.stringify(pool), JSON.stringify(basicLands));
       res.status(201).json({ id: poolId });
     }),
   );
@@ -155,7 +184,7 @@ export function createApp({ db, cards, staticDir, setCacheMs = 7 * 24 * 3600 * 1
       const body = req.body ?? {};
       const submit: boolean | undefined = body.submitted;
 
-      if (deck.submittedAt && submit !== false && (body.main || body.basics)) {
+      if (deck.submittedAt && submit !== false && (body.main || body.basics || body.layout)) {
         throw new HttpError(409, 'Deck is submitted. Reopen it to make changes.');
       }
 
@@ -173,15 +202,17 @@ export function createApp({ db, cards, staticDir, setCacheMs = 7 * 24 * 3600 * 1
           basics[c] = Number.isInteger(n) ? Math.max(0, Math.min(60, n)) : 0;
         }
       }
+      const layout = body.layout !== undefined ? sanitizeLayout(body.layout) : deck.layout;
       const notes = typeof body.notes === 'string' ? body.notes.slice(0, 2000) : deck.notes;
       const playerName = body.playerName !== undefined ? cleanName(body.playerName) : deck.playerName;
       let submittedAt = deck.submittedAt;
       if (submit === true) submittedAt = now();
       if (submit === false) submittedAt = null;
 
-      db.prepare('UPDATE decks SET main = ?, basics = ?, notes = ?, player_name = ?, submitted_at = ?, updated_at = ? WHERE id = ?').run(
+      db.prepare('UPDATE decks SET main = ?, basics = ?, layout = ?, notes = ?, player_name = ?, submitted_at = ?, updated_at = ? WHERE id = ?').run(
         JSON.stringify(main),
         JSON.stringify(basics),
+        layout ? JSON.stringify(layout) : null,
         notes,
         playerName,
         submittedAt,

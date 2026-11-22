@@ -54,6 +54,8 @@ export interface DeckSummary {
   updatedAt: string;
 }
 
+export type BasicLands = Partial<Record<Color, CardTemplate>>;
+
 export interface Pool {
   id: string;
   setCode: string;
@@ -63,6 +65,8 @@ export interface Pool {
   createdBy: string;
   createdAt: string;
   cards: PoolCard[];
+  /** Basic land printings used to show basics as cards. */
+  basicLands: BasicLands;
 }
 
 export interface PoolWithDecks extends Pool {
@@ -72,6 +76,24 @@ export interface PoolWithDecks extends Pool {
 export type Basics = Record<Color, number>;
 export const emptyBasics = (): Basics => ({ W: 0, U: 0, B: 0, R: 0, G: 0 });
 
+/**
+ * Where each card sits on the table: columns ("piles") of card ids, top to bottom.
+ * Basic lands appear in the deck as ids like "basic-W-3".
+ */
+export interface Layout {
+  deck: string[][];
+  side: string[][];
+}
+
+export interface PoolListItem {
+  id: string;
+  setCode: string;
+  setName: string;
+  createdBy: string;
+  createdAt: string;
+  players: { deckId: string; playerName: string; submitted: boolean }[];
+}
+
 export interface Deck {
   id: string;
   poolId: string;
@@ -80,6 +102,7 @@ export interface Deck {
   main: string[];
   basics: Basics;
   notes: string;
+  layout: Layout | null;
   submittedAt: string | null;
   updatedAt: string;
 }

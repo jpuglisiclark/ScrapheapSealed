@@ -43,5 +43,13 @@ export function openDb(file: string): DB {
     );
     CREATE INDEX IF NOT EXISTS decks_by_pool ON decks(pool_id);
   `);
+  // Columns added after the first release.
+  addColumn(db, 'pools', 'basic_lands', "TEXT NOT NULL DEFAULT '{}'");
+  addColumn(db, 'decks', 'layout', 'TEXT');
   return db;
+}
+
+function addColumn(db: DB, table: string, column: string, def: string) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
 }

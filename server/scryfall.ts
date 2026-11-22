@@ -1,4 +1,5 @@
-import type { CardTemplate, Color, Rarity, SetInfo } from '../shared/types.ts';
+import type { BasicLands, CardTemplate, Color, Rarity, SetInfo } from '../shared/types.ts';
+import { BASIC_NAMES } from '../shared/cards.ts';
 
 const API = 'https://api.scryfall.com';
 const HEADERS = { 'User-Agent': 'SealedTogether/0.1', Accept: 'application/json' };
@@ -77,4 +78,25 @@ export async function fetchSetCards(code: string): Promise<CardTemplate[]> {
     raw = await searchAll(`set:${safe} -type:basic -is:promo`);
   }
   return raw.filter((c) => c.rarity !== 'special' && c.rarity !== 'bonus').map(normalizeCard);
+}
+
+/** One printing of each basic land from the set (falling back to Foundations if the set has none). */
+export async function fetchBasics(code: string): Promise<BasicLands> {
+  const safe = code.replace(/[^a-z0-9]/gi, '');
+  const load = async (set: string) => {
+    try {
+      return (await searchAll(`set:${set} type:basic -name:Wastes -is:fullart`)).map(normalizeCard);
+    } catch (e: any) {
+      if (e.status === 404) return [];
+      throw e;
+    }
+  };
+  let cards = await load(safe);
+  if (cards.length === 0) cards = await load('fdn');
+  const out: BasicLands = {};
+  for (const [color, name] of Object.entries(BASIC_NAMES) as [Color, string][]) {
+    const c = cards.find((x) => x.name === name);
+    if (c) out[color] = c;
+  }
+  return out;
 }

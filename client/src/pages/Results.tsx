@@ -2,20 +2,23 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api.ts';
 import { getIdentity } from '../identity.ts';
-import { COLOR_NAMES, type Deck, type PoolCard, type PoolWithDecks } from '../../../shared/types.ts';
+import { COLORS, COLOR_NAMES, type Deck, type Pool, type PoolCard, type PoolWithDecks } from '../../../shared/types.ts';
+import { basicCard } from '../../../shared/layout.ts';
 import { comparePool, headToHead, type CardConsensus, type DeckAnalysis } from '../../../shared/analytics.ts';
-import { BASIC_NAMES, CURVE_LABELS, curveBucket, isLand, GUILDS, MONO } from '../../../shared/cards.ts';
+import { CURVE_LABELS, curveBucket, isLand, GUILDS, MONO } from '../../../shared/cards.ts';
 import { CardName, CardTile } from '../components/Card.tsx';
 import { ColorDots, ManaCost } from '../components/Mana.tsx';
 import { Curve, CurveLegend } from '../components/Curve.tsx';
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
-function DeckView({ a }: { a: DeckAnalysis }) {
-  const cols = [...CURVE_LABELS.map((l, i) => ({ label: `${l} mana`, cards: a.spells.filter((c) => curveBucket(c.cmc) === i + 1) })), { label: 'Lands', cards: a.cards.filter(isLand) }].filter(
-    (c) => c.cards.length,
-  );
-  const basics = Object.entries(a.deck.basics).filter(([, n]) => n > 0);
+function DeckView({ a, pool }: { a: DeckAnalysis; pool: Pool }) {
+  const basics = COLORS.flatMap((c) => Array.from({ length: a.deck.basics[c] }, (_, i) => basicCard(pool, `basic-${c}-${i + 1}`)));
+  const cols = [
+    ...CURVE_LABELS.map((l, i) => ({ label: `${l} mana`, cards: a.spells.filter((c) => curveBucket(c.cmc) === i + 1) })),
+    { label: 'Lands', cards: a.cards.filter(isLand) },
+    { label: 'Basics', cards: basics },
+  ].filter((c) => c.cards.length);
   return (
     <div className="deck-view">
       <div className="columns">
@@ -25,16 +28,13 @@ function DeckView({ a }: { a: DeckAnalysis }) {
               {col.label} <span className="muted">{col.cards.length}</span>
             </div>
             <div className="stack">
-              {[...col.cards].sort((x, y) => x.cmc - y.cmc || x.name.localeCompare(y.name)).map((c) => (
+              {(col.label === 'Basics' ? col.cards : [...col.cards].sort((x, y) => x.cmc - y.cmc || x.name.localeCompare(y.name))).map((c) => (
                 <CardTile key={c.uid} card={c} />
               ))}
             </div>
           </div>
         ))}
       </div>
-      <p className="muted small">
-        Basics: {basics.length ? basics.map(([c, n]) => `${n} ${BASIC_NAMES[c as keyof typeof BASIC_NAMES]}`).join(', ') : 'none'}
-      </p>
     </div>
   );
 }
@@ -335,7 +335,7 @@ export default function Results() {
     <main className="page results">
       <div className="results-head">
         <div>
-          <Link to={`/p/${poolId}`} className="back">← Pool lobby</Link>
+          <Link to="/?tab=past" className="back">← Past pools</Link>
           <h1>How everyone built {pool.setName}</h1>
           {pending.length > 0 && (
             <p className="muted">
@@ -388,7 +388,7 @@ export default function Results() {
               <h3>{opened.deck.playerName}’s deck — {opened.archetype}</h3>
               <button className="btn small" onClick={() => setOpenDeck(null)}>Close</button>
             </div>
-            <DeckView a={opened} />
+            <DeckView a={opened} pool={pool} />
           </div>
         )}
       </section>
