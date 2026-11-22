@@ -470,3 +470,12 @@ textarea { resize: vertical; }
   .pp-actions { align-items: flex-start; }
   .stats.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.pane .columns.no-x-scroll { overflow-x: hidden; }
+
+/* In-app confirmation dialog */
+.modal-backdrop { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / 0.45); }
+.modal { width: min(420px, 100%); background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.2rem 1.3rem 1rem; box-shadow: 0 20px 50px rgb(0 0 0 / 0.35); }
+.modal h2 { margin: 0 0 0.4rem; font-size: 1.15rem; }
+.modal p { margin: 0 0 1.1rem; color: var(--ink-2); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }

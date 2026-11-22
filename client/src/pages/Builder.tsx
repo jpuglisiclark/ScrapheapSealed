@@ -25,6 +25,7 @@ import { CardTile } from '../components/Card.tsx';
 import { ColorDots } from '../components/Mana.tsx';
 import { Curve, CurveLegend } from '../components/Curve.tsx';
 import { CopyButton } from './Lobby.tsx';
+import { useConfirm } from '../components/ConfirmDialog.tsx';
 
 type SaveState = 'saved' | 'pending' | 'saving' | 'error';
 interface DeckMeta {
@@ -233,6 +234,7 @@ export default function Builder() {
   const sideAreaW = useWidth(sideAreaRef);
   const suppressClick = useRef(false);
   const loaded = useRef(false);
+  const [dialog, confirmInApp] = useConfirm();
   layoutRef.current = layout;
 
   useEffect(() => {
@@ -498,8 +500,13 @@ export default function Builder() {
     const last = [...deckUids].reverse().find((u) => basicColor(u) === col);
     if (last) setLayout(removeCard(layout, last));
   };
-  const clearDeck = () => {
-    if (!confirm(`Move all ${total} cards in your deck back to the sideboard? Basic lands will be removed.`)) return;
+  const clearDeck = async () => {
+    const ok = await confirmInApp({
+      title: 'Clear your deck?',
+      message: `All ${total} cards in your deck will go back to the sideboard. Basic lands will be removed.`,
+      confirmLabel: 'Clear deck',
+    });
+    if (!ok) return;
     let next: Layout = { deck: [], side: layout.side };
     for (const u of deckUids) if (!isBasicId(u)) next = placeCard(next, 'side', getCard(u), sideMode, getCard);
     setLayout(next);
@@ -514,13 +521,22 @@ export default function Builder() {
   const pileProps = { getCard, locked, draggingSet, selected, hint, onDragPointerDown, onPileDragPointerDown, onCardClick };
   const ghostCard = dragging ? getCard(dragging[0]) : null;
   // Show enough slots to fill the visible width, plus one spare so there's always room to the right.
-  const slotCount = (piles: number, areaW: number) => Math.max(piles + 1, Math.floor(areaW / (cardW + 10)) + 1);
+  // As many slots as fit the visible width exactly, so there's no sideways scrolling unless
+  // piles have been placed further right than fits (e.g. after making cards bigger).
+  const GAP = 9.6;
+  const fit = (areaW: number) => Math.max(1, Math.floor((areaW - 4 + GAP) / (cardW + GAP)));
+  const slotCount = (piles: number, areaW: number) => Math.max(piles, fit(areaW));
   const deckSlots = Array.from({ length: slotCount(layout.deck.length, deckAreaW) }, (_, i) => layout.deck[i] ?? []);
   const sideSlots = Array.from({ length: slotCount(layout.side.length, sideAreaW) }, (_, i) => sidePiles[i] ?? []);
 
   async function setSubmitted(submitted: boolean) {
     if (!me || !layout || !meta) return;
-    if (submitted && total !== 40 && !confirm(`Your deck has ${total} cards (40 is standard). Submit anyway?`)) return;
+    if (
+      submitted &&
+      total !== 40 &&
+      !(await confirmInApp({ title: 'Submit anyway?', message: `Your deck has ${total} cards. 40 is standard for sealed.`, confirmLabel: 'Submit deck' }))
+    )
+      return;
     setSave('saving');
     try {
       const d = await api.saveDeck(
@@ -550,6 +566,7 @@ export default function Builder() {
 
   return (
     <main className={`builder ${dragging ? 'is-dragging' : ''}`} style={{ '--card-w': `${cardW}px` } as React.CSSProperties}>
+      {dialog}
       {ghostCard && (
         <div
           className="drag-ghost"
@@ -624,7 +641,7 @@ export default function Builder() {
                 </div>
               )}
             </div>
-            <div className="columns" ref={deckAreaRef} onPointerDown={onAreaPointerDown}>
+            <div className={`columns ${layout.deck.length > fit(deckAreaW) ? '' : 'no-x-scroll'}`} ref={deckAreaRef} onPointerDown={onAreaPointerDown}>
               {deckSlots.map((col, i) => (
                 <Pile key={i} zone="deck" col={i} visible={col} {...pileProps} />
               ))}
@@ -696,7 +713,7 @@ export default function Builder() {
                 {hiddenCount} hidden
               </p>
             )}
-            <div className="columns" ref={sideAreaRef} onPointerDown={onAreaPointerDown}>
+            <div className={`columns ${layout.side.length > fit(sideAreaW) ? '' : 'no-x-scroll'}`} ref={sideAreaRef} onPointerDown={onAreaPointerDown}>
               {sideSlots.map((col, i) => (
                 <Pile key={i} zone="side" col={i} visible={col} {...pileProps} />
               ))}
@@ -745,7 +762,7 @@ export default function Builder() {
               disabled={locked}
               maxLength={2000}
               rows={4}
-              placeholder="Why this build? Shared with the others once everyone can compare."
+              placeholder="Why this build?"
               onChange={(e) => setMeta({ ...meta, notes: e.target.value })}
             />
           </section>
