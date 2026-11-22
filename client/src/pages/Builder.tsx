@@ -70,14 +70,20 @@ interface PileProps {
   hint: DropHint | null;
   onCardClick: (c: PoolCard, e: React.MouseEvent) => void;
   onDragPointerDown: (uid: string, e: React.PointerEvent) => void;
+  onPileDragPointerDown: (uids: string[], e: React.PointerEvent) => void;
 }
 
-function Pile({ zone, col, visible, getCard, locked, draggingSet, selected, hint, onCardClick, onDragPointerDown }: PileProps) {
-  const active = hint && 'col' in hint && hint.zone === zone && hint.col === col;
+function Pile({ zone, col, visible, getCard, locked, draggingSet, selected, hint, onCardClick, onDragPointerDown, onPileDragPointerDown }: PileProps) {
+  // Empty slots get no highlight or line: dropping there simply puts the cards in that slot.
+  const active = visible.length > 0 && hint && 'col' in hint && hint.zone === zone && hint.col === col;
   return (
-    <div className={`column pile ${active ? 'drop-active' : ''}`} data-drop="pile" data-zone={zone} data-col={col}>
-      <div className="column-head">
-        {visible.length} {visible.length === 1 ? 'card' : 'cards'}
+    <div className={`column pile ${active ? 'drop-active' : ''} ${visible.length ? '' : 'empty'}`} data-drop="pile" data-zone={zone} data-col={col}>
+      <div
+        className={`column-head ${visible.length && !locked ? 'can-drag' : ''}`}
+        title={visible.length && !locked ? 'Drag to move this whole pile' : undefined}
+        onPointerDown={visible.length && !locked ? (e) => onPileDragPointerDown(visible, e) : undefined}
+      >
+        {visible.length ? `${visible.length} ${visible.length === 1 ? 'card' : 'cards'}` : '\u00a0'}
       </div>
       <div className="stack">
         {visible.map((u) => {
@@ -99,13 +105,18 @@ function Pile({ zone, col, visible, getCard, locked, draggingSet, selected, hint
   );
 }
 
-/** Invisible drop target filling the space after the last pile: dropping there makes a new pile. */
-function NewPile({ zone, at, active, empty }: { zone: Zone; at: number; active: boolean; empty?: boolean }) {
-  return (
-    <div className={`column new-pile ${active ? 'drop-active' : ''}`} data-drop="new" data-zone={zone} data-newcol={at}>
-      {empty && <span className="empty-hint">Click cards in your sideboard to add them, or drag them here.</span>}
-    </div>
-  );
+/** Width of an element, kept up to date as it resizes. */
+function useWidth(ref: React.RefObject<HTMLElement>) {
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setW(el.clientWidth));
+    ro.observe(el);
+    setW(el.clientWidth);
+    return () => ro.disconnect();
+  });
+  return w;
 }
 
 /** Where on screen dragged cards would land, worked out from the piles under the pointer. */
@@ -113,7 +124,6 @@ function hitTest(x: number, y: number, layout: Layout): DropHint | null {
   const el = document.elementFromPoint(x, y)?.closest('[data-drop]') as HTMLElement | null;
   if (!el) return null;
   const zone = el.dataset.zone as Zone;
-  if (el.dataset.drop === 'new') return { zone, newCol: Number(el.dataset.newcol) };
   const col = Number(el.dataset.col);
   const tiles = [...el.querySelectorAll<HTMLElement>('.stack > .card-tile')];
   let vi = 0;
@@ -217,6 +227,10 @@ export default function Builder() {
   const hintRef = useRef<DropHint | null>(null);
   const layoutRef = useRef<Layout | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
+  const deckAreaRef = useRef<HTMLDivElement>(null);
+  const sideAreaRef = useRef<HTMLDivElement>(null);
+  const deckAreaW = useWidth(deckAreaRef);
+  const sideAreaW = useWidth(sideAreaRef);
   const suppressClick = useRef(false);
   const loaded = useRef(false);
   layoutRef.current = layout;
@@ -310,9 +324,17 @@ export default function Builder() {
    */
   function onDragPointerDown(uid: string, e: React.PointerEvent) {
     if (e.button !== 0 || e.pointerType === 'touch' || e.shiftKey || e.ctrlKey || e.metaKey) return;
+    const keep = selected.has(uid);
+    startDrag(keep ? layoutOrder(layoutRef.current!).filter((u) => selected.has(u)) : [uid], keep, e);
+  }
+  /** Dragging a pile's "N cards" label moves the whole pile. */
+  function onPileDragPointerDown(uids: string[], e: React.PointerEvent) {
+    if (e.button !== 0 || e.pointerType === 'touch') return;
+    startDrag(uids, false, e);
+  }
+
+  function startDrag(group: string[], keepSelection: boolean, e: React.PointerEvent) {
     e.stopPropagation();
-    const current = layoutRef.current!;
-    const group = selected.has(uid) ? layoutOrder(current).filter((u) => selected.has(u)) : [uid];
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     drag.current = { uids: group, startX: e.clientX, startY: e.clientY, offX: e.clientX - r.left, offY: e.clientY - r.top, x: e.clientX, y: e.clientY, active: false };
     let raf = 0;
@@ -358,7 +380,7 @@ export default function Builder() {
         if (Math.hypot(d.x - d.startX, d.y - d.startY) < 6) return;
         d.active = true;
         document.body.classList.add('dragging-cards');
-        if (!selected.has(uid)) setSelected(new Set());
+        if (!keepSelection) setSelected(new Set());
         setDragging(d.uids);
         raf = requestAnimationFrame(autoScroll);
       }
@@ -489,9 +511,12 @@ export default function Builder() {
   };
 
   const draggingSet = new Set(dragging ?? []);
-  const pileProps = { getCard, locked, draggingSet, selected, hint, onDragPointerDown, onCardClick };
+  const pileProps = { getCard, locked, draggingSet, selected, hint, onDragPointerDown, onPileDragPointerDown, onCardClick };
   const ghostCard = dragging ? getCard(dragging[0]) : null;
-  const newPileActive = (zone: Zone) => !!hint && 'newCol' in hint && hint.zone === zone;
+  // Show enough slots to fill the visible width, plus one spare so there's always room to the right.
+  const slotCount = (piles: number, areaW: number) => Math.max(piles + 1, Math.floor(areaW / (cardW + 10)) + 1);
+  const deckSlots = Array.from({ length: slotCount(layout.deck.length, deckAreaW) }, (_, i) => layout.deck[i] ?? []);
+  const sideSlots = Array.from({ length: slotCount(layout.side.length, sideAreaW) }, (_, i) => sidePiles[i] ?? []);
 
   async function setSubmitted(submitted: boolean) {
     if (!me || !layout || !meta) return;
@@ -599,11 +624,11 @@ export default function Builder() {
                 </div>
               )}
             </div>
-            <div className="columns" onPointerDown={onAreaPointerDown}>
-              {layout.deck.map((col, i) => (
+            <div className="columns" ref={deckAreaRef} onPointerDown={onAreaPointerDown}>
+              {deckSlots.map((col, i) => (
                 <Pile key={i} zone="deck" col={i} visible={col} {...pileProps} />
               ))}
-              <NewPile zone="deck" at={layout.deck.length} active={newPileActive('deck')} empty={layout.deck.length === 0} />
+              {deckUids.length === 0 && <p className="empty-hint">Click cards in your sideboard to add them, or drag them here.</p>}
             </div>
           </section>
 
@@ -671,11 +696,10 @@ export default function Builder() {
                 {hiddenCount} hidden
               </p>
             )}
-            <div className="columns" onPointerDown={onAreaPointerDown}>
-              {layout.side.map((col, i) =>
-                sidePiles[i].length ? <Pile key={i} zone="side" col={i} visible={sidePiles[i]} {...pileProps} /> : null,
-              )}
-              <NewPile zone="side" at={layout.side.length} active={newPileActive('side')} />
+            <div className="columns" ref={sideAreaRef} onPointerDown={onAreaPointerDown}>
+              {sideSlots.map((col, i) => (
+                <Pile key={i} zone="side" col={i} visible={col} {...pileProps} />
+              ))}
             </div>
           </section>
         </div>

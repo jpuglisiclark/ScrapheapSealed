@@ -37,11 +37,12 @@ describe('layout', () => {
     l = moveCard(l, 'a', { zone: 'deck', col: 0, index: 2 });
     expect(l.deck).toEqual([['b', 'a']]);
     l = moveCard(l, 'c', { zone: 'deck', col: 0, index: 1 });
-    expect(l).toEqual({ deck: [['b', 'c', 'a']], side: [['d']] });
+    expect(l).toEqual({ deck: [['b', 'c', 'a']], side: [[], ['d']] });
     l = moveCard(l, 'a', { zone: 'deck', newCol: 0 });
     expect(l.deck).toEqual([['a'], ['b', 'c']]);
     l = moveCard(l, 'a', { zone: 'side', col: 0, index: 0 });
-    expect(l).toEqual({ deck: [['b', 'c']], side: [['a', 'd']] });
+    // the emptied pile keeps its slot so the pile after it doesn't move
+    expect(l).toEqual({ deck: [[], ['b', 'c']], side: [['a'], ['d']] });
   });
 
   it('removes basics dropped into the sideboard', () => {
@@ -54,12 +55,13 @@ describe('layout', () => {
     l = placeCard(l, 'deck', get('c'), 'cmc', get);
     expect(l.deck).toEqual([['c', 'a'], ['basic-G-1']]);
     l = placeCard(l, 'deck', get('b'), 'cmc', get);
-    expect(l.deck).toEqual([['c', 'a'], ['b'], ['basic-G-1']]);
+    expect(l.deck).toEqual([['c', 'a'], ['basic-G-1'], ['b']]);
     l = placeCard(l, 'deck', basicCard(pool, nextBasicId(l, 'G')), 'cmc', get);
-    expect(l.deck[2]).toEqual(['basic-G-1', 'basic-G-2']);
+    expect(l.deck[1]).toEqual(['basic-G-1', 'basic-G-2']);
     expect(basicsFromLayout(l).G).toBe(2);
     expect(mainFromLayout(l)).toEqual(['c', 'a', 'b']);
-    expect(removeCard(l, 'b').deck).toHaveLength(2);
+    expect(removeCard(l, 'b').deck).toHaveLength(2); // trailing empty pile dropped
+    expect(removeCard(l, 'basic-G-1').deck[1]).toEqual(['basic-G-2']);
   });
 
   it('moves a group of cards together, from several piles and zones', () => {
@@ -67,7 +69,11 @@ describe('layout', () => {
     // into the middle of a pile, counting positions as they were before the move
     expect(moveCards(l, ['a', 'c', 'e'], { zone: 'deck', col: 0, index: 2 })).toEqual({ deck: [['b', 'a', 'c', 'e', 'basic-G-1'], ['x']], side: [['d']] });
     // into a new pile
-    expect(moveCards(l, ['b', 'x'], { zone: 'deck', newCol: 2 })).toEqual({ deck: [['a', 'basic-G-1'], ['b', 'x']], side: [['c', 'd'], ['e']] });
+    expect(moveCards(l, ['b', 'x'], { zone: 'deck', newCol: 2 })).toEqual({ deck: [['a', 'basic-G-1'], [], ['b', 'x']], side: [['c', 'd'], ['e']] });
+    // onto an empty slot well past the last pile: the gap stays as empty piles
+    expect(moveCards(l, ['e'], { zone: 'deck', col: 4, index: 0 })).toEqual({ deck: [['a', 'b', 'basic-G-1'], ['x'], [], [], ['e']], side: [['c', 'd']] });
+    // moving a whole pile leaves its old slot empty and nothing else moves
+    expect(moveCards(l, ['a', 'b', 'basic-G-1'], { zone: 'deck', col: 2, index: 0 })).toEqual({ deck: [[], ['x'], ['a', 'b', 'basic-G-1']], side: [['c', 'd'], ['e']] });
     // to the sideboard: basics are dropped
     expect(moveCards(l, ['a', 'basic-G-1'], { zone: 'side', col: 1, index: 1 })).toEqual({ deck: [['b'], ['x']], side: [['c', 'd'], ['e', 'a']] });
   });

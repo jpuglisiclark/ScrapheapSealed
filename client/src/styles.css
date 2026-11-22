@@ -292,14 +292,15 @@ button.card-tile { cursor: pointer; }
 .divider:hover span, body.resizing-split .divider span { background: var(--accent); }
 body.resizing-split, body.resizing-split * { cursor: ns-resize !important; user-select: none; }
 
-/* Invisible "new pile" target: the empty space after the last pile */
-.column.new-pile { flex: 1 0 var(--card-w); width: auto; display: grid; place-items: center; border-radius: 8px; }
-.new-pile.drop-active { box-shadow: inset 4px 0 0 var(--accent); }
-.empty-hint { color: var(--muted); font-size: 0.9rem; text-align: center; padding: 1rem; }
+/* Piles are fixed slots; empty ones are invisible but still take cards */
+.pane .columns { position: relative; }
+.column-head.can-drag { cursor: grab; }
+.empty-hint { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: var(--muted); font-size: 0.9rem; text-align: center; padding: 1rem; pointer-events: none; }
 
 /* Box selection */
 .marquee { position: fixed; z-index: 150; pointer-events: none; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); border-radius: 2px; }
 body.selecting-cards, body.selecting-cards * { user-select: none; }
+body.selecting-cards .preview { display: none; }
 .card-tile.selected::before {
   /* Drawn inside the card so the parts covered by the next card in the pile stay covered */
   content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;

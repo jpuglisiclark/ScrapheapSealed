@@ -53,7 +53,15 @@ export function sortedColumns(cards: PoolCard[], mode: SortMode): string[][] {
   return [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([, cs]) => cs.sort(byCmcName).map((c) => c.uid));
 }
 
-const clean = (cols: string[][]) => cols.filter((c) => c.length > 0);
+/**
+ * Piles are fixed slots: an empty pile keeps its place so nothing slides over when it empties.
+ * Only empty slots at the very end are dropped (they carry no position information).
+ */
+const clean = (cols: string[][]) => {
+  const out = cols.map((c) => [...c]);
+  while (out.length && out[out.length - 1].length === 0) out.pop();
+  return out;
+};
 
 export function removeCard(layout: Layout, uid: string): Layout {
   const strip = (cols: string[][]) => clean(cols.map((col) => col.filter((u) => u !== uid)));
@@ -83,7 +91,8 @@ export function moveCards(layout: Layout, uids: string[], target: DropTarget): L
   } else {
     const before = layout[target.zone][target.col] ?? [];
     const index = before.slice(0, target.index).filter((u) => !moving.has(u)).length;
-    if (!cols[target.col]) cols[target.col] = [];
+    // Dropping on a slot past the last pile fills the gap with empty piles.
+    while (cols.length <= target.col) cols.push([]);
     cols[target.col].splice(index, 0, ...placed);
   }
   return { deck: clean(out.deck), side: clean(out.side) };
@@ -105,7 +114,7 @@ export function placeCard(layout: Layout, zone: Zone, card: PoolCard, mode: Sort
   const key = sortKey(card, mode);
   const color = basicColor(card.uid);
   let target = color ? cols.findIndex((col) => col.some((u) => basicColor(u) === color)) : -1;
-  if (target === -1) target = cols.findIndex((col) => sortKey(getCard(col[0]), mode) === key);
+  if (target === -1) target = cols.findIndex((col) => col.length > 0 && sortKey(getCard(col[0]), mode) === key);
   if (target !== -1) {
     const col = cols[target];
     // Keep the pile in mana value order where it already is; otherwise just add to the bottom.
@@ -113,11 +122,12 @@ export function placeCard(layout: Layout, zone: Zone, card: PoolCard, mode: Sort
     if (at === -1 || color) at = col.length;
     col.splice(at, 0, card.uid);
   } else {
-    let at = cols.findIndex((col) => sortKey(getCard(col[0]), mode) > key);
-    if (at === -1) at = cols.length;
-    cols.splice(at, 0, [card.uid]);
+    // No matching pile: use the first empty slot, or a new one at the end. Existing piles never shift.
+    const empty = cols.findIndex((col) => col.length === 0);
+    if (empty !== -1) cols[empty].push(card.uid);
+    else cols.push([card.uid]);
   }
-  return { ...base, [zone]: cols };
+  return { ...base, [zone]: clean(cols) };
 }
 
 export function mainFromLayout(layout: Layout): string[] {
