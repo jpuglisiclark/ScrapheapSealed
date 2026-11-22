@@ -4,6 +4,8 @@ interface Ask {
   title: string;
   message: string;
   confirmLabel: string;
+  /** Notice with a single button instead of a yes/no question. */
+  alertOnly?: boolean;
   resolve: (ok: boolean) => void;
 }
 
@@ -14,7 +16,7 @@ interface Ask {
 export function useConfirm() {
   const [ask, setAsk] = useState<Ask | null>(null);
   const confirmInApp = useCallback(
-    (o: { title: string; message: string; confirmLabel?: string }) =>
+    (o: { title: string; message: string; confirmLabel?: string; alertOnly?: boolean }) =>
       new Promise<boolean>((resolve) => setAsk({ confirmLabel: 'OK', ...o, resolve })),
     [],
   );
@@ -26,7 +28,7 @@ export function useConfirm() {
   return [dialog, confirmInApp] as const;
 }
 
-function ConfirmDialog({ title, message, confirmLabel, onClose }: Ask & { onClose: (ok: boolean) => void }) {
+function ConfirmDialog({ title, message, confirmLabel, alertOnly, onClose }: Ask & { onClose: (ok: boolean) => void }) {
   const confirmRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     confirmRef.current?.focus();
@@ -45,9 +47,11 @@ function ConfirmDialog({ title, message, confirmLabel, onClose }: Ask & { onClos
         <h2 id="confirm-title">{title}</h2>
         <p id="confirm-msg">{message}</p>
         <div className="modal-actions">
-          <button type="button" className="btn" onClick={() => onClose(false)}>
-            Cancel
-          </button>
+          {!alertOnly && (
+            <button type="button" className="btn" onClick={() => onClose(false)}>
+              Cancel
+            </button>
+          )}
           <button type="button" className="btn primary" ref={confirmRef} onClick={() => onClose(true)}>
             {confirmLabel}
           </button>

@@ -52,6 +52,15 @@ describe('API', () => {
     expect(saved.body.main).toEqual(uids);
     expect(saved.body.basics).toEqual({ W: 9, U: 8, B: 0, R: 0, G: 0 });
 
+    // Decks under 40 cards can't be submitted (23 + 17 = 40 is fine)
+    const bobUids = pool.cards.slice(0, 22).map((c: any) => c.uid);
+    const small = await request(app)
+      .put(`/api/decks/${bob.deckId}`)
+      .set('x-deck-token', bob.token)
+      .send({ main: bobUids, basics: { G: 17 }, submitted: true })
+      .expect(400);
+    expect(small.body.error).toBe('Your deck must have a minimum of 40 cards in it.');
+
     // Results are locked until you submit
     await request(app).get(`/api/pools/${poolId}/results`).expect(403);
     await request(app).get(`/api/pools/${poolId}/results`).set('x-deck-token', ann.token).expect(403);

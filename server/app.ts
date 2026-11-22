@@ -206,7 +206,11 @@ export function createApp({ db, cards, staticDir, setCacheMs = 7 * 24 * 3600 * 1
       const notes = typeof body.notes === 'string' ? body.notes.slice(0, 2000) : deck.notes;
       const playerName = body.playerName !== undefined ? cleanName(body.playerName) : deck.playerName;
       let submittedAt = deck.submittedAt;
-      if (submit === true) submittedAt = now();
+      if (submit === true) {
+        const size = main.length + COLORS.reduce((n, c) => n + basics[c], 0);
+        if (size < 40) throw new HttpError(400, 'Your deck must have a minimum of 40 cards in it.');
+        submittedAt = now();
+      }
       if (submit === false) submittedAt = null;
 
       db.prepare('UPDATE decks SET main = ?, basics = ?, layout = ?, notes = ?, player_name = ?, submitted_at = ?, updated_at = ? WHERE id = ?').run(

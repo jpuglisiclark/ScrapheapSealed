@@ -40,6 +40,7 @@ const sameHint = (a: DropHint | null, b: DropHint | null) => JSON.stringify(a) =
 const MIN_CARD_W = typeof window !== 'undefined' && window.innerWidth < 640 ? 96 : 128;
 const MAX_CARD_W = 240;
 const DEFAULT_SPLIT = 0.45;
+const MIN_DECK = 40;
 
 /** Per-browser view preferences; storage can be unavailable, so every access is guarded. */
 function readNumber(key: string, ok: (v: number) => boolean, fallback: number) {
@@ -531,12 +532,15 @@ export default function Builder() {
 
   async function setSubmitted(submitted: boolean) {
     if (!me || !layout || !meta) return;
-    if (
-      submitted &&
-      total !== 40 &&
-      !(await confirmInApp({ title: 'Submit anyway?', message: `Your deck has ${total} cards. 40 is standard for sealed.`, confirmLabel: 'Submit deck' }))
-    )
+    if (submitted && total < MIN_DECK) {
+      await confirmInApp({
+        title: 'Deck too small',
+        message: `Your deck must have a minimum of ${MIN_DECK} cards in it.`,
+        confirmLabel: 'OK',
+        alertOnly: true,
+      });
       return;
+    }
     setSave('saving');
     try {
       const d = await api.saveDeck(
