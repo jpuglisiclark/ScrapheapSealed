@@ -274,13 +274,43 @@ button.card-tile { cursor: pointer; }
 .save-state { font-size: 0.85rem; color: var(--muted); }
 .save-state.error { color: var(--danger); }
 .builder-body { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 1.25rem; align-items: start; }
-.zone { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.9rem 1rem 1rem; margin-bottom: 1rem; }
-.deck-zone { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.zone-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
-.zone-head h2 { margin: 0; }
+
+/* One window holding the deck (top) and sideboard (bottom), split by a movable line */
+.table {
+  display: flex; flex-direction: column;
+  height: calc(100vh - 7.5rem); min-height: 420px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.pane { display: flex; flex-direction: column; min-height: 0; padding: 0.7rem 0.9rem 0; }
+.side-pane { flex: 1; }
+.pane-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.pane-head h2 { margin: 0; }
+.pane .columns { flex: 1; min-height: 0; overscroll-behavior: contain; }
+.divider { flex: none; height: 12px; display: grid; place-items: center; cursor: ns-resize; touch-action: none; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.divider span { width: 56px; height: 4px; border-radius: 2px; background: var(--border); }
+.divider:hover span, body.resizing-split .divider span { background: var(--accent); }
+body.resizing-split, body.resizing-split * { cursor: ns-resize !important; user-select: none; }
+
+/* Invisible "new pile" target: the empty space after the last pile */
+.column.new-pile { flex: 1 0 var(--card-w); width: auto; display: grid; place-items: center; border-radius: 8px; }
+.new-pile.drop-active { box-shadow: inset 4px 0 0 var(--accent); }
+.empty-hint { color: var(--muted); font-size: 0.9rem; text-align: center; padding: 1rem; }
+
+/* Box selection */
+.marquee { position: fixed; z-index: 150; pointer-events: none; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); border-radius: 2px; }
+body.selecting-cards, body.selecting-cards * { user-select: none; }
+.card-tile.selected::before {
+  /* Drawn inside the card so the parts covered by the next card in the pile stay covered */
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 3px var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.drag-ghost { position: fixed; }
+.ghost-count { position: absolute; top: -10px; right: -10px; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 13px; background: var(--accent); color: var(--accent-ink); font-weight: 800; font-size: 0.85rem; display: grid; place-items: center; box-shadow: 0 2px 6px rgb(0 0 0 / 0.3); }
 .count { font-size: 0.95rem; color: var(--muted); margin-left: 0.3rem; font-variant-numeric: tabular-nums; }
 .count.ok { color: var(--ok); }
-.empty { color: var(--muted); padding: 2rem 0; text-align: center; border: 2px dashed var(--border); border-radius: var(--radius); margin: 0; }
 .filters { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .filters input { width: 14rem; }
 .filters select { width: auto; }
@@ -290,7 +320,6 @@ button.card-tile { cursor: pointer; }
 .pip-toggle:hover { opacity: 1; }
 .filter-note { margin: -0.4rem 0 0.6rem; }
 .columns { display: flex; gap: 0.6rem; overflow: auto; padding: 2px 2px 0.5rem; }
-.zone .columns { overscroll-behavior: contain; }
 .zone-actions { display: flex; gap: 0.5rem; align-items: center; margin-left: auto; }
 .sort-select { width: auto; padding: 0.3rem 0.5rem; font-size: 0.85rem; }
 .size-slider { flex-direction: row; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.85rem; color: var(--muted); }
@@ -312,14 +341,6 @@ button.card-tile.can-drag { cursor: grab; touch-action: manipulation; }
 .drag-ghost img { width: 100%; display: block; border-radius: calc(var(--card-w) * 0.045); }
 body.dragging-cards, body.dragging-cards * { cursor: grabbing !important; user-select: none; }
 body.dragging-cards .preview { display: none; }
-.new-pile {
-  display: grid; place-items: center; text-align: center;
-  min-height: calc(var(--card-w) * 1.393);
-  border: 2px dashed var(--border); border-radius: 8px;
-  color: var(--muted); font-size: 0.85rem; font-weight: 600; padding: 0.5rem;
-}
-.new-pile.big { width: 100%; flex: 1; min-height: 8rem; }
-.new-pile.drop-active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 
 .sidebar { position: sticky; top: 4.5rem; display: flex; flex-direction: column; gap: 1rem; }
 .sidebar .panel { padding: 0.9rem; }
@@ -329,9 +350,8 @@ body.dragging-cards .preview { display: none; }
 .stats dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stats.compact { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .basics { list-style: none; padding: 0; margin: 0 0 0.5rem; }
-.basics li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 0.5rem; padding: 0.25rem 0; }
+.basics li { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0.5rem; padding: 0.25rem 0; }
 .pip-label { display: inline-flex; align-items: center; gap: 0.4rem; }
-.pip-share { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 2.5em; text-align: right; }
 .stepper { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .stepper button { width: 2rem; height: 1.9rem; border: 0; background: var(--surface-2); color: var(--ink); cursor: pointer; font-size: 1rem; }
 .stepper button:disabled { opacity: 0.35; cursor: not-allowed; }
@@ -434,6 +454,7 @@ textarea { resize: vertical; }
 /* ---------- responsive ---------- */
 @media (max-width: 980px) {
   .builder-body { grid-template-columns: 1fr; }
+  .table { height: 80vh; }
   .sidebar { position: static; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
   .lobby-grid { grid-template-columns: 1fr; }
 }
@@ -448,9 +469,3 @@ textarea { resize: vertical; }
   .pp-actions { align-items: flex-start; }
   .stats.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-
-/* Resize bar under the deck and sideboard areas */
-.resize-handle { height: 14px; margin: 2px -0.5rem -0.6rem; display: grid; place-items: center; cursor: ns-resize; border-radius: 6px; touch-action: none; }
-.resize-handle span { width: 48px; height: 4px; border-radius: 2px; background: var(--border); }
-.resize-handle:hover span, body.resizing-zone .resize-handle span { background: var(--accent); }
-body.resizing-zone, body.resizing-zone * { cursor: ns-resize !important; user-select: none; }

@@ -64,29 +64,34 @@ export type DropTarget = { zone: Zone; col: number; index: number } | { zone: Zo
 
 /** Move a card to an exact spot. Basic lands dropped in the sideboard are removed. */
 export function moveCard(layout: Layout, uid: string, target: DropTarget): Layout {
-  if (target.zone === 'side' && isBasicId(uid)) return removeCard(layout, uid);
-  const cols = layout[target.zone].map((c) => [...c]);
-  // Remember where the target column is by identity, since removing the card may empty a column.
-  let insertCol: string[];
-  let index: number;
+  return moveCards(layout, [uid], target);
+}
+
+/**
+ * Move a group of cards to one spot, keeping them together in the given order.
+ * `target.index` refers to positions in the pile as it is before the move.
+ * Basic lands dropped in the sideboard are removed.
+ */
+export function moveCards(layout: Layout, uids: string[], target: DropTarget): Layout {
+  const moving = new Set(uids);
+  const placed = target.zone === 'side' ? uids.filter((u) => !isBasicId(u)) : uids;
+  const strip = (cols: string[][]) => cols.map((col) => col.filter((u) => !moving.has(u)));
+  const out: Layout = { deck: strip(layout.deck), side: strip(layout.side) };
+  const cols = out[target.zone];
   if ('newCol' in target) {
-    insertCol = [];
-    cols.splice(Math.max(0, Math.min(cols.length, target.newCol)), 0, insertCol);
-    index = 0;
+    if (placed.length) cols.splice(Math.max(0, Math.min(cols.length, target.newCol)), 0, [...placed]);
   } else {
-    insertCol = cols[target.col] ?? (cols[cols.length] = []);
-    index = target.index;
-    const from = insertCol.indexOf(uid);
-    if (from !== -1 && from < index) index--;
+    const before = layout[target.zone][target.col] ?? [];
+    const index = before.slice(0, target.index).filter((u) => !moving.has(u)).length;
+    if (!cols[target.col]) cols[target.col] = [];
+    cols[target.col].splice(index, 0, ...placed);
   }
-  const other: Zone = target.zone === 'deck' ? 'side' : 'deck';
-  for (const col of cols) {
-    const i = col.indexOf(uid);
-    if (i !== -1) col.splice(i, 1);
-  }
-  insertCol.splice(Math.max(0, Math.min(insertCol.length, index)), 0, uid);
-  const otherCols = layout[other].map((col) => col.filter((u) => u !== uid));
-  return { [target.zone]: clean(cols), [other]: clean(otherCols) } as unknown as Layout;
+  return { deck: clean(out.deck), side: clean(out.side) };
+}
+
+/** Card ids in on-screen order: pile by pile, top to bottom, deck first. */
+export function layoutOrder(layout: Layout): string[] {
+  return [...layout.deck.flat(), ...layout.side.flat()];
 }
 
 /**

@@ -3,24 +3,25 @@ import { TextCard, usePreview } from './Preview.tsx';
 
 interface Props {
   card: PoolCard;
-  onClick?: () => void;
+  onClick?: (e: React.MouseEvent) => void;
   label?: string;
   badge?: React.ReactNode;
   dim?: boolean;
   /** Starts a drag (handled by the builder with pointer events). */
   onDragPointerDown?: (e: React.PointerEvent) => void;
   dragging?: boolean;
+  selected?: boolean;
 }
 
 /** A single card image (with text fallback) that shows the large preview on hover. */
-export function CardTile({ card, onClick, label, badge, dim, onDragPointerDown, dragging }: Props) {
+export function CardTile({ card, onClick, label, badge, dim, onDragPointerDown, dragging, selected }: Props) {
   const { show, hide } = usePreview();
   const inner = card.image ? (
     <img src={card.image} alt={card.name} loading="lazy" draggable={false} />
   ) : (
     <TextCard card={card} />
   );
-  const cls = `card-tile rarity-${card.rarity} ${card.foil ? 'foil' : ''} ${dim ? 'dim' : ''} ${dragging ? 'dragging' : ''} ${onDragPointerDown ? 'can-drag' : ''}`;
+  const cls = `card-tile rarity-${card.rarity} ${card.foil ? 'foil' : ''} ${dim ? 'dim' : ''} ${dragging ? 'dragging' : ''} ${selected ? 'selected' : ''} ${onDragPointerDown ? 'can-drag' : ''}`;
   const common = {
     className: cls,
     'data-uid': card.uid,
@@ -35,9 +36,9 @@ export function CardTile({ card, onClick, label, badge, dim, onDragPointerDown, 
       type="button"
       aria-label={label ?? card.name}
       draggable={false}
-      onClick={() => {
+      onClick={(e) => {
         hide();
-        onClick();
+        onClick(e);
       }}
       {...common}
     >

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { basicCard, basicsFromLayout, mainFromLayout, moveCard, nextBasicId, placeCard, reconcileLayout, removeCard } from '../shared/layout.ts';
+import { moveCards, basicCard, basicsFromLayout, mainFromLayout, moveCard, nextBasicId, placeCard, reconcileLayout, removeCard } from '../shared/layout.ts';
 import { emptyBasics, type Layout, type Pool, type PoolCard } from '../shared/types.ts';
 import { card } from './fixtures.ts';
 
@@ -60,5 +60,15 @@ describe('layout', () => {
     expect(basicsFromLayout(l).G).toBe(2);
     expect(mainFromLayout(l)).toEqual(['c', 'a', 'b']);
     expect(removeCard(l, 'b').deck).toHaveLength(2);
+  });
+
+  it('moves a group of cards together, from several piles and zones', () => {
+    const l: Layout = { deck: [['a', 'b', 'basic-G-1'], ['x']], side: [['c', 'd'], ['e']] };
+    // into the middle of a pile, counting positions as they were before the move
+    expect(moveCards(l, ['a', 'c', 'e'], { zone: 'deck', col: 0, index: 2 })).toEqual({ deck: [['b', 'a', 'c', 'e', 'basic-G-1'], ['x']], side: [['d']] });
+    // into a new pile
+    expect(moveCards(l, ['b', 'x'], { zone: 'deck', newCol: 2 })).toEqual({ deck: [['a', 'basic-G-1'], ['b', 'x']], side: [['c', 'd'], ['e']] });
+    // to the sideboard: basics are dropped
+    expect(moveCards(l, ['a', 'basic-G-1'], { zone: 'side', col: 1, index: 1 })).toEqual({ deck: [['b'], ['x']], side: [['c', 'd'], ['e', 'a']] });
   });
 });

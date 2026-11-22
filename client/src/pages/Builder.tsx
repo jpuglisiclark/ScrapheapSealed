@@ -3,14 +3,15 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { api } from '../api.ts';
 import { getIdentity } from '../identity.ts';
 import { COLORS, COLOR_NAMES, type Color, type Layout, type PoolCard, type PoolWithDecks } from '../../../shared/types.ts';
-import { BASIC_NAMES, basicsCount, cardColors, curveBucket, exportDecklist, isCreature, isLand, totalPips } from '../../../shared/cards.ts';
+import { BASIC_NAMES, basicsCount, cardColors, curveBucket, exportDecklist, isCreature, isLand } from '../../../shared/cards.ts';
 import {
   basicCard,
   basicColor,
   basicsFromLayout,
   isBasicId,
+  layoutOrder,
   mainFromLayout,
-  moveCard,
+  moveCards,
   nextBasicId,
   placeCard,
   reconcileLayout,
@@ -31,10 +32,32 @@ interface DeckMeta {
   notes: string;
   submittedAt: string | null;
 }
-/** Where a dragged card would land, plus where to draw the insertion line. */
+/** Where dragged cards would land, plus where to draw the insertion line. */
 type DropHint = DropTarget & { lineTop?: number };
-
 const sameHint = (a: DropHint | null, b: DropHint | null) => JSON.stringify(a) === JSON.stringify(b);
+
+const MIN_CARD_W = typeof window !== 'undefined' && window.innerWidth < 640 ? 96 : 128;
+const MAX_CARD_W = 240;
+const DEFAULT_SPLIT = 0.45;
+
+/** Per-browser view preferences; storage can be unavailable, so every access is guarded. */
+function readNumber(key: string, ok: (v: number) => boolean, fallback: number) {
+  try {
+    const raw = localStorage.getItem(key);
+    const v = Number(raw);
+    if (raw !== null && ok(v)) return v;
+  } catch {
+    /* storage unavailable */
+  }
+  return fallback;
+}
+function writeValue(key: string, v: number) {
+  try {
+    localStorage.setItem(key, String(v));
+  } catch {
+    /* storage unavailable */
+  }
+}
 
 interface PileProps {
   zone: Zone;
@@ -42,13 +65,14 @@ interface PileProps {
   visible: string[];
   getCard: (uid: string) => PoolCard;
   locked: boolean;
-  dragging: string | null;
+  draggingSet: Set<string>;
+  selected: Set<string>;
   hint: DropHint | null;
-  onCardClick: (c: PoolCard) => void;
+  onCardClick: (c: PoolCard, e: React.MouseEvent) => void;
   onDragPointerDown: (uid: string, e: React.PointerEvent) => void;
 }
 
-function Pile({ zone, col, visible, getCard, locked, dragging, hint, onCardClick, onDragPointerDown }: PileProps) {
+function Pile({ zone, col, visible, getCard, locked, draggingSet, selected, hint, onCardClick, onDragPointerDown }: PileProps) {
   const active = hint && 'col' in hint && hint.zone === zone && hint.col === col;
   return (
     <div className={`column pile ${active ? 'drop-active' : ''}`} data-drop="pile" data-zone={zone} data-col={col}>
@@ -62,9 +86,10 @@ function Pile({ zone, col, visible, getCard, locked, dragging, hint, onCardClick
             <CardTile
               key={u}
               card={c}
-              onClick={locked ? undefined : () => onCardClick(c)}
+              onClick={locked ? undefined : (e) => onCardClick(c, e)}
               onDragPointerDown={locked ? undefined : (e) => onDragPointerDown(u, e)}
-              dragging={dragging === u}
+              dragging={draggingSet.has(u)}
+              selected={selected.has(u)}
             />
           );
         })}
@@ -74,17 +99,16 @@ function Pile({ zone, col, visible, getCard, locked, dragging, hint, onCardClick
   );
 }
 
-function NewPile({ zone, at, dragging, hint, big }: { zone: Zone; at: number; dragging: string | null; hint: DropHint | null; big?: boolean }) {
-  const active = hint && 'newCol' in hint && hint.zone === zone;
-  if (!dragging && !big) return null;
+/** Invisible drop target filling the space after the last pile: dropping there makes a new pile. */
+function NewPile({ zone, at, active, empty }: { zone: Zone; at: number; active: boolean; empty?: boolean }) {
   return (
-    <div className={`column new-pile ${active ? 'drop-active' : ''} ${big ? 'big' : ''}`} data-drop="new" data-zone={zone} data-newcol={at}>
-      {big ? 'Click cards in your pool to add them, or drag them here.' : '+ New pile'}
+    <div className={`column new-pile ${active ? 'drop-active' : ''}`} data-drop="new" data-zone={zone} data-newcol={at}>
+      {empty && <span className="empty-hint">Click cards in your sideboard to add them, or drag them here.</span>}
     </div>
   );
 }
 
-/** Where on screen a dragged card would land, worked out from the piles under the pointer. */
+/** Where on screen dragged cards would land, worked out from the piles under the pointer. */
 function hitTest(x: number, y: number, layout: Layout): DropHint | null {
   const el = document.elementFromPoint(x, y)?.closest('[data-drop]') as HTMLElement | null;
   if (!el) return null;
@@ -107,72 +131,37 @@ function hitTest(x: number, y: number, layout: Layout): DropHint | null {
   return { zone, col, index, lineTop };
 }
 
-/** Card width the zone heights are sized for; bigger cards scroll inside the zones instead of growing them. */
-const BASE_CARD_W = typeof window !== 'undefined' && window.innerWidth < 640 ? 96 : 128;
-const MAX_CARD_W = 240;
-function readCardSize() {
-  try {
-    const v = Number(localStorage.getItem('st:cardW'));
-    if (v >= BASE_CARD_W && v <= MAX_CARD_W) return v;
-  } catch {
-    /* storage unavailable */
+interface Box {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+const normBox = (b: Box) => ({ left: Math.min(b.x1, b.x2), top: Math.min(b.y1, b.y2), right: Math.max(b.x1, b.x2), bottom: Math.max(b.y1, b.y2) });
+
+/** Cards whose visible part (not the part covered by the next card in the pile) overlaps the box. */
+function cardsInBox(root: HTMLElement, box: Box): string[] {
+  const b = normBox(box);
+  const hits: string[] = [];
+  for (const area of root.querySelectorAll<HTMLElement>('.columns')) {
+    const clip = area.getBoundingClientRect();
+    for (const stack of area.querySelectorAll<HTMLElement>('.stack')) {
+      const tiles = [...stack.querySelectorAll<HTMLElement>(':scope > .card-tile')];
+      tiles.forEach((t, i) => {
+        const r = t.getBoundingClientRect();
+        const top = Math.max(r.top, clip.top);
+        const bottom = Math.min(i + 1 < tiles.length ? tiles[i + 1].getBoundingClientRect().top : r.bottom, clip.bottom);
+        const left = Math.max(r.left, clip.left);
+        const right = Math.min(r.right, clip.right);
+        if (bottom > top && right > left && left < b.right && right > b.left && top < b.bottom && bottom > b.top) hits.push(t.dataset.uid!);
+      });
+    }
   }
-  return BASE_CARD_W;
-}
-/** Height a row of piles needs at the base card size. */
-function zoneHeight(pileSizes: number[], minimum: number) {
-  const w = BASE_CARD_W;
-  const pile = (n: number) => 24 + w * 1.3934 + Math.max(0, n - 1) * w * 0.2004 + 4;
-  return Math.ceil(Math.max(minimum, ...pileSizes.map(pile))) + 22;
-}
-
-/** The deck area grows with its tallest pile, but only up to this many cards. */
-const DECK_MAX_PILE = 8;
-
-function readHeights(): Record<Zone, number | null> {
-  try {
-    const v = JSON.parse(localStorage.getItem('st:zoneHeights') ?? '{}');
-    return { deck: typeof v.deck === 'number' ? v.deck : null, side: typeof v.side === 'number' ? v.side : null };
-  } catch {
-    return { deck: null, side: null };
-  }
-}
-
-/** Bar under a zone: drag to set its height, double-click to go back to automatic. */
-function ResizeHandle({ target, onResize }: { target: React.RefObject<HTMLElement>; onResize: (h: number | null) => void }) {
-  return (
-    <div
-      className="resize-handle"
-      role="separator"
-      aria-orientation="horizontal"
-      aria-label="Drag to resize. Double-click to reset."
-      title="Drag to resize · double-click to reset"
-      onDoubleClick={() => onResize(null)}
-      onPointerDown={(e) => {
-        if (e.button !== 0 || !target.current) return;
-        e.preventDefault();
-        const startY = e.clientY;
-        const startH = target.current.getBoundingClientRect().height;
-        document.body.classList.add('resizing-zone');
-        const move = (ev: PointerEvent) => onResize(Math.round(Math.max(120, Math.min(3000, startH + ev.clientY - startY))));
-        const up = () => {
-          document.body.classList.remove('resizing-zone');
-          window.removeEventListener('pointermove', move);
-          window.removeEventListener('pointerup', up);
-          window.removeEventListener('pointercancel', up);
-        };
-        window.addEventListener('pointermove', move);
-        window.addEventListener('pointerup', up);
-        window.addEventListener('pointercancel', up);
-      }}
-    >
-      <span />
-    </div>
-  );
+  return hits;
 }
 
 interface DragState {
-  uid: string;
+  uids: string[];
   startX: number;
   startY: number;
   offX: number;
@@ -214,22 +203,23 @@ export default function Builder() {
   const [error, setError] = useState('');
   const [save, setSave] = useState<SaveState>('saved');
   const [sideMode, setSideMode] = useState<SortMode>('color');
+  const [deckMode, setDeckMode] = useState<SortMode>('cmc');
+  const [cardW, setCardW] = useState(() => readNumber('st:cardW', (v) => v >= MIN_CARD_W && v <= MAX_CARD_W, MIN_CARD_W));
+  const [split, setSplit] = useState(() => readNumber('st:split', (v) => v >= 0.1 && v <= 0.9, DEFAULT_SPLIT));
   const [filter, setFilter] = useState<Set<Color>>(new Set());
   const [search, setSearch] = useState('');
-  const [dragging, setDragging] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<string[] | null>(null);
   const [hint, setHint] = useState<DropHint | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [box, setBox] = useState<Box | null>(null);
   const drag = useRef<DragState | null>(null);
   const ghost = useRef<HTMLDivElement>(null);
   const hintRef = useRef<DropHint | null>(null);
   const layoutRef = useRef<Layout | null>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
   const suppressClick = useRef(false);
-  layoutRef.current = layout;
-  const [deckMode, setDeckMode] = useState<SortMode>('cmc');
-  const [cardW, setCardW] = useState(readCardSize);
-  const [heights, setHeights] = useState(readHeights);
-  const deckAreaRef = useRef<HTMLDivElement>(null);
-  const sideAreaRef = useRef<HTMLDivElement>(null);
   const loaded = useRef(false);
+  layoutRef.current = layout;
 
   useEffect(() => {
     if (!me) return;
@@ -272,6 +262,15 @@ export default function Builder() {
     return () => window.removeEventListener('beforeunload', warn);
   }, [save]);
 
+  // Escape clears the selection.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelected(new Set());
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   if (!me) return <Navigate to={`/p/${poolId}`} replace />;
   if (error) return <main className="page"><div className="error">{error}</div></main>;
   if (!pool || !meta || !layout) return <main className="page"><p className="muted">Loading your pool…</p></main>;
@@ -292,8 +291,6 @@ export default function Builder() {
     curve[curveBucket(c.cmc) - 1]++;
     if (isCreature(c)) creatureCurve[curveBucket(c.cmc) - 1]++;
   }
-  const pipTotals = totalPips(mainCards);
-  const pipSum = COLORS.reduce((s, c) => s + pipTotals[c], 0);
   const avgCmc = spells.length ? spells.reduce((s, c) => s + c.cmc, 0) / spells.length : 0;
 
   const q = search.trim().toLowerCase();
@@ -302,17 +299,22 @@ export default function Builder() {
     if (q && !`${c.name} ${c.typeLine} ${c.oracleText}`.toLowerCase().includes(q)) return false;
     return filter.size === 0 || cardColors(c).every((col) => filter.has(col));
   };
-  const hiddenCount = sideCards.length - layout.side.flat().filter(shownInSide).length;
+  const sidePiles = layout.side.map((col) => col.filter(shownInSide));
+  const hiddenCount = sideCards.length - sidePiles.flat().length;
+  const inDeck = new Set(deckUids);
 
   /**
    * Dragging uses pointer events (not the browser's native drag and drop, which is unreliable
    * across browsers). A press only turns into a drag after the mouse moves a few pixels,
-   * so plain clicks still move cards between deck and sideboard.
+   * so plain clicks still work. Dragging a selected card moves the whole selection.
    */
   function onDragPointerDown(uid: string, e: React.PointerEvent) {
-    if (e.button !== 0 || e.pointerType === 'touch') return;
+    if (e.button !== 0 || e.pointerType === 'touch' || e.shiftKey || e.ctrlKey || e.metaKey) return;
+    e.stopPropagation();
+    const current = layoutRef.current!;
+    const group = selected.has(uid) ? layoutOrder(current).filter((u) => selected.has(u)) : [uid];
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    drag.current = { uid, startX: e.clientX, startY: e.clientY, offX: e.clientX - r.left, offY: e.clientY - r.top, x: e.clientX, y: e.clientY, active: false };
+    drag.current = { uids: group, startX: e.clientX, startY: e.clientY, offX: e.clientX - r.left, offY: e.clientY - r.top, x: e.clientX, y: e.clientY, active: false };
     let raf = 0;
 
     const updateHint = () => {
@@ -324,7 +326,7 @@ export default function Builder() {
         setHint(next);
       }
     };
-    // Scroll the page when dragging near the top or bottom edge.
+    // Scroll the page, and the deck/sideboard area under the pointer, when dragging near their edges.
     const autoScroll = () => {
       const d = drag.current;
       if (!d?.active) return;
@@ -334,13 +336,12 @@ export default function Builder() {
         window.scrollBy(0, dy);
         updateHint();
       }
-      // Also scroll a deck/sideboard area when the pointer nears its edges (cards may be larger than the area).
       const sc = document.elementFromPoint(d.x, d.y)?.closest('.columns') as HTMLElement | null;
       if (sc) {
-        const r = sc.getBoundingClientRect();
+        const rect = sc.getBoundingClientRect();
         const inner = 40;
-        const sy = d.y < r.top + inner ? -6 : d.y > r.bottom - inner ? 6 : 0;
-        const sx = d.x < r.left + inner ? -6 : d.x > r.right - inner ? 6 : 0;
+        const sy = d.y < rect.top + inner ? -6 : d.y > rect.bottom - inner ? 6 : 0;
+        const sx = d.x < rect.left + inner ? -6 : d.x > rect.right - inner ? 6 : 0;
         if (sx || sy) {
           sc.scrollBy(sx, sy);
           updateHint();
@@ -357,7 +358,8 @@ export default function Builder() {
         if (Math.hypot(d.x - d.startX, d.y - d.startY) < 6) return;
         d.active = true;
         document.body.classList.add('dragging-cards');
-        setDragging(d.uid);
+        if (!selected.has(uid)) setSelected(new Set());
+        setDragging(d.uids);
         raf = requestAnimationFrame(autoScroll);
       }
       ev.preventDefault();
@@ -377,7 +379,7 @@ export default function Builder() {
       suppressClick.current = true;
       setTimeout(() => (suppressClick.current = false), 0);
       const target = hintRef.current;
-      if (target && layoutRef.current) setLayout(moveCard(layoutRef.current, d.uid, target));
+      if (target && layoutRef.current) setLayout(moveCards(layoutRef.current, d.uids, target));
       hintRef.current = null;
       setHint(null);
       setDragging(null);
@@ -387,50 +389,109 @@ export default function Builder() {
     window.addEventListener('pointercancel', up);
   }
 
-  const clickDeckCard = (c: PoolCard) => {
+  /** Press on empty space in the deck or sideboard and drag to draw a selection box. */
+  function onAreaPointerDown(e: React.PointerEvent) {
+    if (locked || e.button !== 0 || e.pointerType === 'touch') return;
+    if ((e.target as HTMLElement).closest('.card-tile')) return;
+    const root = tableRef.current;
+    if (!root) return;
+    e.preventDefault();
+    const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+    const base = additive ? new Set(selected) : new Set<string>();
+    const b: Box = { x1: e.clientX, y1: e.clientY, x2: e.clientX, y2: e.clientY };
+    let moved = false;
+    document.body.classList.add('selecting-cards');
+    const move = (ev: PointerEvent) => {
+      b.x2 = ev.clientX;
+      b.y2 = ev.clientY;
+      if (!moved && Math.hypot(b.x2 - b.x1, b.y2 - b.y1) < 4) return;
+      moved = true;
+      setBox({ ...b });
+      setSelected(new Set([...base, ...cardsInBox(root, b)]));
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      document.body.classList.remove('selecting-cards');
+      setBox(null);
+      if (!moved && !additive) setSelected(new Set());
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  }
+
+  /** Drag the line between deck and sideboard; the window's total height stays the same. */
+  function onDividerPointerDown(e: React.PointerEvent) {
+    if (e.button !== 0 || !tableRef.current) return;
+    e.preventDefault();
+    // Panes share the window's height minus the divider; follow the mouse's movement exactly.
+    const usable = tableRef.current.getBoundingClientRect().height - 12;
+    const startY = e.clientY;
+    const startSplit = split;
+    document.body.classList.add('resizing-split');
+    let last = split;
+    const move = (ev: PointerEvent) => {
+      last = Math.max(0.1, Math.min(0.9, startSplit + (ev.clientY - startY) / usable));
+      setSplit(last);
+    };
+    const up = () => {
+      document.body.classList.remove('resizing-split');
+      writeValue('st:split', last);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  }
+
+  /** Send cards to the other zone, each into the pile it naturally belongs in. */
+  function sendAcross(uids: string[]) {
+    let next = layout!;
+    for (const u of uids) {
+      if (inDeck.has(u)) next = isBasicId(u) ? removeCard(next, u) : placeCard(next, 'side', getCard(u), sideMode, getCard);
+      else next = placeCard(next, 'deck', getCard(u), deckMode, getCard);
+    }
+    setLayout(next);
+  }
+  const onCardClick = (c: PoolCard, e: React.MouseEvent) => {
     if (suppressClick.current) return;
-    setLayout(isBasicId(c.uid) ? removeCard(layout, c.uid) : placeCard(layout, 'side', c, sideMode, getCard));
-  };
-  const clickSideCard = (c: PoolCard) => {
-    if (suppressClick.current) return;
-    setLayout(placeCard(layout, 'deck', c, deckMode, getCard));
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      // Modifier-click adds or removes a card from the selection.
+      const next = new Set(selected);
+      if (next.has(c.uid)) next.delete(c.uid);
+      else next.add(c.uid);
+      setSelected(next);
+      return;
+    }
+    if (selected.has(c.uid) && selected.size > 1) sendAcross(layoutOrder(layout).filter((u) => selected.has(u)));
+    else sendAcross([c.uid]);
+    setSelected(new Set());
   };
   const addBasic = (col: Color) => setLayout(placeCard(layout, 'deck', basicCard(pool, nextBasicId(layout, col)), deckMode, getCard));
+  const removeBasic = (col: Color) => {
+    const last = [...deckUids].reverse().find((u) => basicColor(u) === col);
+    if (last) setLayout(removeCard(layout, last));
+  };
   const clearDeck = () => {
     if (!confirm(`Move all ${total} cards in your deck back to the sideboard? Basic lands will be removed.`)) return;
     let next: Layout = { deck: [], side: layout.side };
     for (const u of deckUids) if (!isBasicId(u)) next = placeCard(next, 'side', getCard(u), sideMode, getCard);
     setLayout(next);
+    setSelected(new Set());
   };
   const changeCardSize = (w: number) => {
     setCardW(w);
-    try {
-      localStorage.setItem('st:cardW', String(w));
-    } catch {
-      /* storage unavailable */
-    }
-  };
-  const sidePiles = layout.side.map((col) => col.filter(shownInSide));
-  const resizeZone = (zone: Zone) => (h: number | null) => {
-    setHeights((prev) => {
-      const next = { ...prev, [zone]: h };
-      try {
-        localStorage.setItem('st:zoneHeights', JSON.stringify(next));
-      } catch {
-        /* storage unavailable */
-      }
-      return next;
-    });
-  };
-  const deckHeight = heights.deck ?? zoneHeight(layout.deck.map((c) => Math.min(c.length, DECK_MAX_PILE)), 150);
-  const sideHeight = heights.side ?? zoneHeight(sidePiles.map((c) => c.length), 150);
-  const removeBasic = (col: Color) => {
-    const last = [...deckUids].reverse().find((u) => basicColor(u) === col);
-    if (last) setLayout(removeCard(layout, last));
+    writeValue('st:cardW', w);
   };
 
-  const pileProps = { getCard, locked, dragging, hint, onDragPointerDown };
-  const ghostCard = dragging ? getCard(dragging) : null;
+  const draggingSet = new Set(dragging ?? []);
+  const pileProps = { getCard, locked, draggingSet, selected, hint, onDragPointerDown, onCardClick };
+  const ghostCard = dragging ? getCard(dragging[0]) : null;
+  const newPileActive = (zone: Zone) => !!hint && 'newCol' in hint && hint.zone === zone;
 
   async function setSubmitted(submitted: boolean) {
     if (!me || !layout || !meta) return;
@@ -445,6 +506,7 @@ export default function Builder() {
       loaded.current = false;
       setMeta({ playerName: d.playerName, notes: d.notes, submittedAt: d.submittedAt });
       setLayout({ ...layout });
+      setSelected(new Set());
       setSave('saved');
     } catch (e: any) {
       setSave('error');
@@ -459,6 +521,7 @@ export default function Builder() {
   );
   const saveLabel = { saved: 'All changes saved', pending: 'Unsaved changes…', saving: 'Saving…', error: 'Save failed — retrying on next change' }[save];
   const poolUrl = `${location.origin}/p/${poolId}`;
+  const nb = box && normBox(box);
 
   return (
     <main className={`builder ${dragging ? 'is-dragging' : ''}`} style={{ '--card-w': `${cardW}px` } as React.CSSProperties}>
@@ -470,8 +533,11 @@ export default function Builder() {
           style={drag.current ? { transform: `translate(${drag.current.x - drag.current.offX}px, ${drag.current.y - drag.current.offY}px) rotate(2deg)` } : undefined}
         >
           {ghostCard.image ? <img src={ghostCard.image} alt="" /> : <div className="text-card">{ghostCard.name}</div>}
+          {dragging!.length > 1 && <span className="ghost-count">{dragging!.length}</span>}
         </div>
       )}
+      {nb && <div className="marquee" style={{ left: nb.left, top: nb.top, width: nb.right - nb.left, height: nb.bottom - nb.top }} />}
+
       <div className="builder-bar">
         <div className="bar-left">
           <Link to="/?tab=past" className="back">← Pools</Link>
@@ -481,7 +547,7 @@ export default function Builder() {
           <CopyButton text={poolUrl} label="Copy pool link" className="btn" />
           <label className="size-slider">
             Card size
-            <input type="range" min={BASE_CARD_W} max={MAX_CARD_W} step={4} value={cardW} onChange={(e) => changeCardSize(Number(e.target.value))} />
+            <input type="range" min={MIN_CARD_W} max={MAX_CARD_W} step={4} value={cardW} onChange={(e) => changeCardSize(Number(e.target.value))} />
           </label>
         </div>
         <div className="bar-right">
@@ -507,14 +573,15 @@ export default function Builder() {
       )}
 
       <div className="builder-body">
-        <div className="zones">
-          <section className="zone deck-zone">
-            <div className="zone-head">
+        <div className="table" ref={tableRef}>
+          <section className="pane deck-pane" style={{ height: `calc((100% - 12px) * ${split})` }}>
+            <div className="pane-head">
               <h2>
                 Deck <span className={`count ${total === 40 ? 'ok' : ''}`}>{total}/40</span>
               </h2>
               <span className="muted small">
                 {spells.length} spells · {nonbasicLands + basicTotal} lands
+                {selected.size > 0 && ` · ${selected.size} selected`}
               </span>
               {!locked && deckUids.length > 0 && (
                 <div className="zone-actions">
@@ -532,17 +599,31 @@ export default function Builder() {
                 </div>
               )}
             </div>
-            <div className="columns" ref={deckAreaRef} style={{ height: deckHeight }}>
+            <div className="columns" onPointerDown={onAreaPointerDown}>
               {layout.deck.map((col, i) => (
-                <Pile key={i} zone="deck" col={i} visible={col} onCardClick={clickDeckCard} {...pileProps} />
+                <Pile key={i} zone="deck" col={i} visible={col} {...pileProps} />
               ))}
-              <NewPile zone="deck" at={layout.deck.length} dragging={dragging} hint={hint} big={layout.deck.length === 0} />
+              <NewPile zone="deck" at={layout.deck.length} active={newPileActive('deck')} empty={layout.deck.length === 0} />
             </div>
-            <ResizeHandle target={deckAreaRef} onResize={resizeZone('deck')} />
           </section>
 
-          <section className="zone side-zone">
-            <div className="zone-head">
+          <div
+            className="divider"
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Drag to change how much space the deck and sideboard get. Double-click to reset."
+            title="Drag to resize · double-click to reset"
+            onPointerDown={onDividerPointerDown}
+            onDoubleClick={() => {
+              setSplit(DEFAULT_SPLIT);
+              writeValue('st:split', DEFAULT_SPLIT);
+            }}
+          >
+            <span />
+          </div>
+
+          <section className="pane side-pane">
+            <div className="pane-head">
               <h2>
                 Sideboard <span className="count">{sideCards.length}</span>
               </h2>
@@ -590,14 +671,12 @@ export default function Builder() {
                 {hiddenCount} hidden
               </p>
             )}
-            <div className="columns" ref={sideAreaRef} style={{ height: sideHeight }}>
-              {layout.side.map((col, i) => {
-                const visible = sidePiles[i];
-                return visible.length ? <Pile key={i} zone="side" col={i} visible={visible} onCardClick={clickSideCard} {...pileProps} /> : null;
-              })}
-              <NewPile zone="side" at={layout.side.length} dragging={dragging} hint={hint} />
+            <div className="columns" onPointerDown={onAreaPointerDown}>
+              {layout.side.map((col, i) =>
+                sidePiles[i].length ? <Pile key={i} zone="side" col={i} visible={sidePiles[i]} {...pileProps} /> : null,
+              )}
+              <NewPile zone="side" at={layout.side.length} active={newPileActive('side')} />
             </div>
-            <ResizeHandle target={sideAreaRef} onResize={resizeZone('side')} />
           </section>
         </div>
 
@@ -616,30 +695,23 @@ export default function Builder() {
           <section className="panel">
             <h3>Basic lands</h3>
             <ul className="basics">
-              {COLORS.map((c) => {
-                const share = pipSum ? pipTotals[c] / pipSum : 0;
-                return (
-                  <li key={c}>
-                    <span className="pip-label">
-                      <ColorDots colors={[c]} /> {BASIC_NAMES[c]}
-                    </span>
-                    <span className="pip-share" title={`${Math.round(share * 100)}% of your colored mana symbols`}>
-                      {share ? `${Math.round(share * 100)}%` : ''}
-                    </span>
-                    <span className="stepper">
-                      <button type="button" disabled={locked || basics[c] === 0} onClick={() => removeBasic(c)} aria-label={`Remove a ${BASIC_NAMES[c]}`}>
-                        −
-                      </button>
-                      <span className="n">{basics[c]}</span>
-                      <button type="button" disabled={locked} onClick={() => addBasic(c)} aria-label={`Add a ${BASIC_NAMES[c]}`}>
-                        +
-                      </button>
-                    </span>
-                  </li>
-                );
-              })}
+              {COLORS.map((c) => (
+                <li key={c}>
+                  <span className="pip-label">
+                    <ColorDots colors={[c]} /> {BASIC_NAMES[c]}
+                  </span>
+                  <span className="stepper">
+                    <button type="button" disabled={locked || basics[c] === 0} onClick={() => removeBasic(c)} aria-label={`Remove a ${BASIC_NAMES[c]}`}>
+                      −
+                    </button>
+                    <span className="n">{basics[c]}</span>
+                    <button type="button" disabled={locked} onClick={() => addBasic(c)} aria-label={`Add a ${BASIC_NAMES[c]}`}>
+                      +
+                    </button>
+                  </span>
+                </li>
+              ))}
             </ul>
-            <p className="muted small">Percentages show each color’s share of the mana symbols in your deck. Click a basic in your deck to remove it.</p>
           </section>
 
           <section className="panel">
