@@ -126,6 +126,51 @@ function zoneHeight(pileSizes: number[], minimum: number) {
   return Math.ceil(Math.max(minimum, ...pileSizes.map(pile))) + 22;
 }
 
+/** The deck area grows with its tallest pile, but only up to this many cards. */
+const DECK_MAX_PILE = 8;
+
+function readHeights(): Record<Zone, number | null> {
+  try {
+    const v = JSON.parse(localStorage.getItem('st:zoneHeights') ?? '{}');
+    return { deck: typeof v.deck === 'number' ? v.deck : null, side: typeof v.side === 'number' ? v.side : null };
+  } catch {
+    return { deck: null, side: null };
+  }
+}
+
+/** Bar under a zone: drag to set its height, double-click to go back to automatic. */
+function ResizeHandle({ target, onResize }: { target: React.RefObject<HTMLElement>; onResize: (h: number | null) => void }) {
+  return (
+    <div
+      className="resize-handle"
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Drag to resize. Double-click to reset."
+      title="Drag to resize · double-click to reset"
+      onDoubleClick={() => onResize(null)}
+      onPointerDown={(e) => {
+        if (e.button !== 0 || !target.current) return;
+        e.preventDefault();
+        const startY = e.clientY;
+        const startH = target.current.getBoundingClientRect().height;
+        document.body.classList.add('resizing-zone');
+        const move = (ev: PointerEvent) => onResize(Math.round(Math.max(120, Math.min(3000, startH + ev.clientY - startY))));
+        const up = () => {
+          document.body.classList.remove('resizing-zone');
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+          window.removeEventListener('pointercancel', up);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
+      }}
+    >
+      <span />
+    </div>
+  );
+}
+
 interface DragState {
   uid: string;
   startX: number;
@@ -181,6 +226,9 @@ export default function Builder() {
   layoutRef.current = layout;
   const [deckMode, setDeckMode] = useState<SortMode>('cmc');
   const [cardW, setCardW] = useState(readCardSize);
+  const [heights, setHeights] = useState(readHeights);
+  const deckAreaRef = useRef<HTMLDivElement>(null);
+  const sideAreaRef = useRef<HTMLDivElement>(null);
   const loaded = useRef(false);
 
   useEffect(() => {
@@ -363,6 +411,19 @@ export default function Builder() {
     }
   };
   const sidePiles = layout.side.map((col) => col.filter(shownInSide));
+  const resizeZone = (zone: Zone) => (h: number | null) => {
+    setHeights((prev) => {
+      const next = { ...prev, [zone]: h };
+      try {
+        localStorage.setItem('st:zoneHeights', JSON.stringify(next));
+      } catch {
+        /* storage unavailable */
+      }
+      return next;
+    });
+  };
+  const deckHeight = heights.deck ?? zoneHeight(layout.deck.map((c) => Math.min(c.length, DECK_MAX_PILE)), 150);
+  const sideHeight = heights.side ?? zoneHeight(sidePiles.map((c) => c.length), 150);
   const removeBasic = (col: Color) => {
     const last = [...deckUids].reverse().find((u) => basicColor(u) === col);
     if (last) setLayout(removeCard(layout, last));
@@ -471,12 +532,13 @@ export default function Builder() {
                 </div>
               )}
             </div>
-            <div className="columns" style={{ height: zoneHeight(layout.deck.map((c) => c.length), 150) }}>
+            <div className="columns" ref={deckAreaRef} style={{ height: deckHeight }}>
               {layout.deck.map((col, i) => (
                 <Pile key={i} zone="deck" col={i} visible={col} onCardClick={clickDeckCard} {...pileProps} />
               ))}
               <NewPile zone="deck" at={layout.deck.length} dragging={dragging} hint={hint} big={layout.deck.length === 0} />
             </div>
+            <ResizeHandle target={deckAreaRef} onResize={resizeZone('deck')} />
           </section>
 
           <section className="zone side-zone">
@@ -528,13 +590,14 @@ export default function Builder() {
                 {hiddenCount} hidden
               </p>
             )}
-            <div className="columns" style={{ height: zoneHeight(sidePiles.map((c) => c.length), 150) }}>
+            <div className="columns" ref={sideAreaRef} style={{ height: sideHeight }}>
               {layout.side.map((col, i) => {
                 const visible = sidePiles[i];
                 return visible.length ? <Pile key={i} zone="side" col={i} visible={visible} onCardClick={clickSideCard} {...pileProps} /> : null;
               })}
               <NewPile zone="side" at={layout.side.length} dragging={dragging} hint={hint} />
             </div>
+            <ResizeHandle target={sideAreaRef} onResize={resizeZone('side')} />
           </section>
         </div>
 

@@ -448,3 +448,9 @@ textarea { resize: vertical; }
   .pp-actions { align-items: flex-start; }
   .stats.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Resize bar under the deck and sideboard areas */
+.resize-handle { height: 14px; margin: 2px -0.5rem -0.6rem; display: grid; place-items: center; cursor: ns-resize; border-radius: 6px; touch-action: none; }
+.resize-handle span { width: 48px; height: 4px; border-radius: 2px; background: var(--border); }
+.resize-handle:hover span, body.resizing-zone .resize-handle span { background: var(--accent); }
+body.resizing-zone, body.resizing-zone * { cursor: ns-resize !important; user-select: none; }
