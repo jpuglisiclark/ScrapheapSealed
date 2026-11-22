@@ -208,6 +208,8 @@ section { margin-bottom: 1.5rem; }
 }
 button.card-tile { cursor: pointer; }
 .card-tile img { width: 100%; height: 100%; display: block; object-fit: cover; }
+/* Each card is its own layer, so overlays inside it never rise above the next card in a pile */
+.card-tile { isolation: isolate; }
 .card-tile.foil::after, .preview img.foil + .foil-sheen {
   content: '';
   position: absolute; inset: 0;
@@ -302,7 +304,7 @@ body.resizing-split, body.resizing-split * { cursor: ns-resize !important; user-
 body.selecting-cards, body.selecting-cards * { user-select: none; }
 body.selecting-cards .preview { display: none; }
 .card-tile.selected::before {
-  /* Drawn inside the card so the parts covered by the next card in the pile stay covered */
+  /* Drawn inside the card; .card-tile isolates it so cards stacked on top still cover it */
   content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
   border-radius: inherit;
   box-shadow: inset 0 0 0 3px var(--accent);
