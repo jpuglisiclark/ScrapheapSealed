@@ -39,58 +39,23 @@ const sameHint = (a: DropHint | null, b: DropHint | null) => JSON.stringify(a) =
 interface PileProps {
   zone: Zone;
   col: number;
-  uids: string[];
   visible: string[];
   getCard: (uid: string) => PoolCard;
   locked: boolean;
   dragging: string | null;
   hint: DropHint | null;
-  setHint: (h: DropHint | null) => void;
-  onDrop: (t: DropTarget) => void;
   onCardClick: (c: PoolCard) => void;
-  onDragStart: (uid: string, e: React.DragEvent) => void;
-  onDragEnd: () => void;
+  onDragPointerDown: (uid: string, e: React.PointerEvent) => void;
 }
 
-function Pile({ zone, col, uids, visible, getCard, locked, dragging, hint, setHint, onDrop, onCardClick, onDragStart, onDragEnd }: PileProps) {
-  const stackRef = useRef<HTMLDivElement>(null);
-
-  /** Which visible slot the pointer is over, and the y position of the line to draw there. */
-  function locate(clientY: number) {
-    const tiles = [...(stackRef.current?.children ?? [])].filter((el) => el.classList.contains('card-tile')) as HTMLElement[];
-    let vi = 0;
-    for (let i = 0; i < tiles.length; i++) {
-      const r = tiles[i].getBoundingClientRect();
-      const nextTop = i + 1 < tiles.length ? tiles[i + 1].getBoundingClientRect().top : r.bottom;
-      if (clientY > (r.top + nextTop) / 2) vi = i + 1;
-    }
-    const lineTop = tiles.length === 0 ? 0 : vi < tiles.length ? tiles[vi].offsetTop - 4 : tiles[tiles.length - 1].offsetTop + tiles[tiles.length - 1].offsetHeight + 2;
-    // Map the visible slot back to a position in the full pile (some cards may be filtered out).
-    const index = vi < visible.length ? uids.indexOf(visible[vi]) : visible.length ? uids.indexOf(visible[visible.length - 1]) + 1 : uids.length;
-    return { index, lineTop };
-  }
-
+function Pile({ zone, col, visible, getCard, locked, dragging, hint, onCardClick, onDragPointerDown }: PileProps) {
   const active = hint && 'col' in hint && hint.zone === zone && hint.col === col;
   return (
-    <div
-      className={`column pile ${active ? 'drop-active' : ''}`}
-      onDragOver={(e) => {
-        if (!dragging) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        const { index, lineTop } = locate(e.clientY);
-        const next: DropHint = { zone, col, index, lineTop };
-        if (!sameHint(hint, next)) setHint(next);
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        if (dragging) onDrop({ zone, col, index: locate(e.clientY).index });
-      }}
-    >
+    <div className={`column pile ${active ? 'drop-active' : ''}`} data-drop="pile" data-zone={zone} data-col={col}>
       <div className="column-head">
         {visible.length} {visible.length === 1 ? 'card' : 'cards'}
       </div>
-      <div className="stack" ref={stackRef}>
+      <div className="stack">
         {visible.map((u) => {
           const c = getCard(u);
           return (
@@ -98,7 +63,8 @@ function Pile({ zone, col, uids, visible, getCard, locked, dragging, hint, setHi
               key={u}
               card={c}
               onClick={locked ? undefined : () => onCardClick(c)}
-              drag={locked ? undefined : { onDragStart: (e) => onDragStart(u, e), onDragEnd, dragging: dragging === u }}
+              onDragPointerDown={locked ? undefined : (e) => onDragPointerDown(u, e)}
+              dragging={dragging === u}
             />
           );
         })}
@@ -108,26 +74,48 @@ function Pile({ zone, col, uids, visible, getCard, locked, dragging, hint, setHi
   );
 }
 
-function NewPile({ zone, at, dragging, hint, setHint, onDrop, big }: { zone: Zone; at: number; dragging: string | null; hint: DropHint | null; setHint: (h: DropHint | null) => void; onDrop: (t: DropTarget) => void; big?: boolean }) {
+function NewPile({ zone, at, dragging, hint, big }: { zone: Zone; at: number; dragging: string | null; hint: DropHint | null; big?: boolean }) {
   const active = hint && 'newCol' in hint && hint.zone === zone;
   if (!dragging && !big) return null;
   return (
-    <div
-      className={`column new-pile ${active ? 'drop-active' : ''} ${big ? 'big' : ''}`}
-      onDragOver={(e) => {
-        if (!dragging) return;
-        e.preventDefault();
-        const next: DropHint = { zone, newCol: at };
-        if (!sameHint(hint, next)) setHint(next);
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        if (dragging) onDrop({ zone, newCol: at });
-      }}
-    >
+    <div className={`column new-pile ${active ? 'drop-active' : ''} ${big ? 'big' : ''}`} data-drop="new" data-zone={zone} data-newcol={at}>
       {big ? 'Click cards in your pool to add them, or drag them here.' : '+ New pile'}
     </div>
   );
+}
+
+/** Where on screen a dragged card would land, worked out from the piles under the pointer. */
+function hitTest(x: number, y: number, layout: Layout): DropHint | null {
+  const el = document.elementFromPoint(x, y)?.closest('[data-drop]') as HTMLElement | null;
+  if (!el) return null;
+  const zone = el.dataset.zone as Zone;
+  if (el.dataset.drop === 'new') return { zone, newCol: Number(el.dataset.newcol) };
+  const col = Number(el.dataset.col);
+  const tiles = [...el.querySelectorAll<HTMLElement>('.stack > .card-tile')];
+  let vi = 0;
+  for (let i = 0; i < tiles.length; i++) {
+    const r = tiles[i].getBoundingClientRect();
+    const nextTop = i + 1 < tiles.length ? tiles[i + 1].getBoundingClientRect().top : r.bottom;
+    if (y > (r.top + nextTop) / 2) vi = i + 1;
+  }
+  const lineTop =
+    tiles.length === 0 ? 0 : vi < tiles.length ? tiles[vi].offsetTop - 4 : tiles[tiles.length - 1].offsetTop + tiles[tiles.length - 1].offsetHeight + 2;
+  // Map the visible slot back to a position in the full pile (the sideboard may have filtered cards hidden).
+  const full = layout[zone][col] ?? [];
+  const visible = tiles.map((t) => t.dataset.uid!);
+  const index = vi < visible.length ? full.indexOf(visible[vi]) : visible.length ? full.indexOf(visible[visible.length - 1]) + 1 : full.length;
+  return { zone, col, index, lineTop };
+}
+
+interface DragState {
+  uid: string;
+  startX: number;
+  startY: number;
+  offX: number;
+  offY: number;
+  x: number;
+  y: number;
+  active: boolean;
 }
 
 export default function Builder() {
@@ -144,6 +132,12 @@ export default function Builder() {
   const [search, setSearch] = useState('');
   const [dragging, setDragging] = useState<string | null>(null);
   const [hint, setHint] = useState<DropHint | null>(null);
+  const drag = useRef<DragState | null>(null);
+  const ghost = useRef<HTMLDivElement>(null);
+  const hintRef = useRef<DropHint | null>(null);
+  const layoutRef = useRef<Layout | null>(null);
+  const suppressClick = useRef(false);
+  layoutRef.current = layout;
   const [showWelcome, setShowWelcome] = useState(params.has('new'));
   const loaded = useRef(false);
 
@@ -220,37 +214,93 @@ export default function Builder() {
   };
   const hiddenCount = sideCards.length - layout.side.flat().filter(shownInSide).length;
 
-  const endDrag = () => {
-    setDragging(null);
-    setHint(null);
-  };
-  const drop = (t: DropTarget) => {
-    if (dragging) setLayout(moveCard(layout, dragging, t));
-    endDrag();
-  };
-  const clickDeckCard = (c: PoolCard) =>
+  /**
+   * Dragging uses pointer events (not the browser's native drag and drop, which is unreliable
+   * across browsers). A press only turns into a drag after the mouse moves a few pixels,
+   * so plain clicks still move cards between deck and sideboard.
+   */
+  function onDragPointerDown(uid: string, e: React.PointerEvent) {
+    if (e.button !== 0 || e.pointerType === 'touch') return;
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    drag.current = { uid, startX: e.clientX, startY: e.clientY, offX: e.clientX - r.left, offY: e.clientY - r.top, x: e.clientX, y: e.clientY, active: false };
+    let raf = 0;
+
+    const updateHint = () => {
+      const d = drag.current;
+      if (!d || !layoutRef.current) return;
+      const next = hitTest(d.x, d.y, layoutRef.current);
+      if (!sameHint(hintRef.current, next)) {
+        hintRef.current = next;
+        setHint(next);
+      }
+    };
+    // Scroll the page when dragging near the top or bottom edge.
+    const autoScroll = () => {
+      const d = drag.current;
+      if (!d?.active) return;
+      const edge = 70;
+      const dy = d.y < edge ? -(edge - d.y) / 3 : d.y > window.innerHeight - edge ? (d.y - (window.innerHeight - edge)) / 3 : 0;
+      if (dy) {
+        window.scrollBy(0, dy);
+        updateHint();
+      }
+      raf = requestAnimationFrame(autoScroll);
+    };
+    const move = (ev: PointerEvent) => {
+      const d = drag.current;
+      if (!d) return;
+      d.x = ev.clientX;
+      d.y = ev.clientY;
+      if (!d.active) {
+        if (Math.hypot(d.x - d.startX, d.y - d.startY) < 6) return;
+        d.active = true;
+        document.body.classList.add('dragging-cards');
+        setDragging(d.uid);
+        raf = requestAnimationFrame(autoScroll);
+      }
+      ev.preventDefault();
+      if (ghost.current) ghost.current.style.transform = `translate(${d.x - d.offX}px, ${d.y - d.offY}px) rotate(2deg)`;
+      updateHint();
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      cancelAnimationFrame(raf);
+      const d = drag.current;
+      drag.current = null;
+      if (!d?.active) return;
+      document.body.classList.remove('dragging-cards');
+      // The click that follows a drag must not also move the card.
+      suppressClick.current = true;
+      setTimeout(() => (suppressClick.current = false), 0);
+      const target = hintRef.current;
+      if (target && layoutRef.current) setLayout(moveCard(layoutRef.current, d.uid, target));
+      hintRef.current = null;
+      setHint(null);
+      setDragging(null);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  }
+
+  const clickDeckCard = (c: PoolCard) => {
+    if (suppressClick.current) return;
     setLayout(isBasicId(c.uid) ? removeCard(layout, c.uid) : placeCard(layout, 'side', c, sideMode, getCard));
-  const clickSideCard = (c: PoolCard) => setLayout(placeCard(layout, 'deck', c, 'cmc', getCard));
+  };
+  const clickSideCard = (c: PoolCard) => {
+    if (suppressClick.current) return;
+    setLayout(placeCard(layout, 'deck', c, 'cmc', getCard));
+  };
   const addBasic = (col: Color) => setLayout(placeCard(layout, 'deck', basicCard(pool, nextBasicId(layout, col)), 'cmc', getCard));
   const removeBasic = (col: Color) => {
     const last = [...deckUids].reverse().find((u) => basicColor(u) === col);
     if (last) setLayout(removeCard(layout, last));
   };
 
-  const pileProps = {
-    getCard,
-    locked,
-    dragging,
-    hint,
-    setHint,
-    onDrop: drop,
-    onDragStart: (uid: string, e: React.DragEvent) => {
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', uid);
-      setDragging(uid);
-    },
-    onDragEnd: endDrag,
-  };
+  const pileProps = { getCard, locked, dragging, hint, onDragPointerDown };
+  const ghostCard = dragging ? getCard(dragging) : null;
 
   async function setSubmitted(submitted: boolean) {
     if (!me || !layout || !meta) return;
@@ -282,6 +332,16 @@ export default function Builder() {
 
   return (
     <main className={`builder ${dragging ? 'is-dragging' : ''}`}>
+      {ghostCard && (
+        <div
+          className="drag-ghost"
+          ref={ghost}
+          aria-hidden
+          style={drag.current ? { transform: `translate(${drag.current.x - drag.current.offX}px, ${drag.current.y - drag.current.offY}px) rotate(2deg)` } : undefined}
+        >
+          {ghostCard.image ? <img src={ghostCard.image} alt="" /> : <div className="text-card">{ghostCard.name}</div>}
+        </div>
+      )}
       <div className="builder-bar">
         <div className="bar-left">
           <Link to="/?tab=past" className="back">← Pools</Link>
@@ -328,7 +388,7 @@ export default function Builder() {
                 Deck <span className={`count ${total === 40 ? 'ok' : ''}`}>{total}/40</span>
               </h2>
               <span className="muted small">
-                {spells.length} spells · {nonbasicLands + basicTotal} lands · drag cards to rearrange, click to send to sideboard
+                {spells.length} spells · {nonbasicLands + basicTotal} lands · drag cards anywhere to rearrange · click to send to sideboard
               </span>
               {!locked && deckUids.length > 0 && (
                 <button className="btn small" type="button" onClick={() => setLayout({ ...layout, deck: sortedColumns(deckUids.map(getCard), 'cmc') })}>
@@ -338,9 +398,9 @@ export default function Builder() {
             </div>
             <div className="columns">
               {layout.deck.map((col, i) => (
-                <Pile key={i} zone="deck" col={i} uids={col} visible={col} onCardClick={clickDeckCard} {...pileProps} />
+                <Pile key={i} zone="deck" col={i} visible={col} onCardClick={clickDeckCard} {...pileProps} />
               ))}
-              <NewPile zone="deck" at={layout.deck.length} dragging={dragging} hint={hint} setHint={setHint} onDrop={drop} big={layout.deck.length === 0} />
+              <NewPile zone="deck" at={layout.deck.length} dragging={dragging} hint={hint} big={layout.deck.length === 0} />
             </div>
           </section>
 
@@ -400,9 +460,9 @@ export default function Builder() {
             <div className="columns">
               {layout.side.map((col, i) => {
                 const visible = col.filter(shownInSide);
-                return visible.length ? <Pile key={i} zone="side" col={i} uids={col} visible={visible} onCardClick={clickSideCard} {...pileProps} /> : null;
+                return visible.length ? <Pile key={i} zone="side" col={i} visible={visible} onCardClick={clickSideCard} {...pileProps} /> : null;
               })}
-              <NewPile zone="side" at={layout.side.length} dragging={dragging} hint={hint} setHint={setHint} onDrop={drop} />
+              <NewPile zone="side" at={layout.side.length} dragging={dragging} hint={hint} />
             </div>
           </section>
         </div>

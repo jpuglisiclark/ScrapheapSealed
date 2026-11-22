@@ -7,50 +7,45 @@ interface Props {
   label?: string;
   badge?: React.ReactNode;
   dim?: boolean;
-  /** Makes the card draggable (HTML drag and drop). */
-  drag?: { onDragStart: (e: React.DragEvent) => void; onDragEnd: (e: React.DragEvent) => void; dragging?: boolean };
+  /** Starts a drag (handled by the builder with pointer events). */
+  onDragPointerDown?: (e: React.PointerEvent) => void;
+  dragging?: boolean;
 }
 
 /** A single card image (with text fallback) that shows the large preview on hover. */
-export function CardTile({ card, onClick, label, badge, dim, drag }: Props) {
+export function CardTile({ card, onClick, label, badge, dim, onDragPointerDown, dragging }: Props) {
   const { show, hide } = usePreview();
   const inner = card.image ? (
     <img src={card.image} alt={card.name} loading="lazy" draggable={false} />
   ) : (
     <TextCard card={card} />
   );
-  const cls = `card-tile rarity-${card.rarity} ${card.foil ? 'foil' : ''} ${dim ? 'dim' : ''} ${drag?.dragging ? 'dragging' : ''}`;
-  const events = {
+  const cls = `card-tile rarity-${card.rarity} ${card.foil ? 'foil' : ''} ${dim ? 'dim' : ''} ${dragging ? 'dragging' : ''} ${onDragPointerDown ? 'can-drag' : ''}`;
+  const common = {
+    className: cls,
+    'data-uid': card.uid,
+    'data-name': card.name,
     onPointerEnter: (e: React.PointerEvent) => show(card, e),
     onPointerMove: (e: React.PointerEvent) => show(card, e),
     onPointerLeave: hide,
+    onPointerDown: onDragPointerDown,
   };
   return onClick ? (
     <button
       type="button"
-      className={cls}
-      title={label ?? card.name}
       aria-label={label ?? card.name}
+      draggable={false}
       onClick={() => {
         hide();
         onClick();
       }}
-      draggable={!!drag}
-      onDragStart={
-        drag &&
-        ((e) => {
-          hide();
-          drag.onDragStart(e);
-        })
-      }
-      onDragEnd={drag?.onDragEnd}
-      {...events}
+      {...common}
     >
       {inner}
       {badge}
     </button>
   ) : (
-    <div className={cls} title={card.name} {...events}>
+    <div {...common}>
       {inner}
       {badge}
     </div>

@@ -207,7 +207,6 @@ section { margin-bottom: 1.5rem; }
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
 }
 button.card-tile { cursor: pointer; }
-button.card-tile:hover { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 2; }
 .card-tile img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .card-tile.foil::after, .preview img.foil + .foil-sheen {
   content: '';
@@ -303,9 +302,11 @@ button.card-tile:hover { outline: 2px solid var(--accent); outline-offset: 1px; 
 .pile.drop-active { background: var(--accent-soft); }
 .drop-line { position: absolute; left: -2px; right: -2px; height: 4px; border-radius: 2px; background: var(--accent); pointer-events: none; z-index: 5; }
 .card-tile.dragging { opacity: 0.35; }
-button.card-tile[draggable='true'] { cursor: grab; }
-.is-dragging .card-tile { pointer-events: none; }
-.is-dragging .pile .stack { pointer-events: none; }
+button.card-tile.can-drag { cursor: grab; touch-action: manipulation; }
+.drag-ghost { position: fixed; left: 0; top: 0; z-index: 200; width: var(--card-w); pointer-events: none; filter: drop-shadow(0 10px 20px rgb(0 0 0 / 0.45)); }
+.drag-ghost img { width: 100%; display: block; border-radius: calc(var(--card-w) * 0.045); }
+body.dragging-cards, body.dragging-cards * { cursor: grabbing !important; user-select: none; }
+body.dragging-cards .preview { display: none; }
 .new-pile {
   display: grid; place-items: center; text-align: center;
   min-height: calc(var(--card-w) * 1.393);
