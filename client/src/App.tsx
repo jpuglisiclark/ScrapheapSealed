@@ -14,7 +14,7 @@ export default function App() {
     <PreviewProvider>
       <header className="site-header">
         <Link to="/" className="brand">
-          <span className="brand-mark" aria-hidden>◆</span> Scrapheap Sealed
+          <span className="brand-logo" aria-hidden /> Scrapheap Sealed
         </Link>
         <nav className="site-nav" aria-label="Main">
           <Link to="/" className={onHome && !pastTab ? 'on' : ''} aria-current={onHome && !pastTab ? 'page' : undefined}>
