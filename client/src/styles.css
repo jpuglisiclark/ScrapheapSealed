@@ -90,7 +90,7 @@ button.link { background: none; border: 0; color: var(--accent); cursor: pointer
 .site-nav { display: flex; gap: 0.25rem; flex-wrap: wrap; }
 .site-nav a { font-size: 0.9rem; font-weight: 600; color: var(--ink-2); text-decoration: none; padding: 0.35rem 0.85rem; border-radius: 999px; border: 1px solid transparent; }
 .site-nav a:hover { color: var(--ink); background: var(--surface-2); }
-.site-nav a.on { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+.site-nav a.on { color: #000000; background: #ffffff; border-color: #ffffff; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .brand { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 800; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
 /* The logo image is white-on-transparent, used as a stencil so its color can be set here */
@@ -106,8 +106,9 @@ button.link { background: none; border: 0; color: var(--accent); cursor: pointer
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
 .panel-head h3 { margin: 0; }
 section { margin-bottom: 1.5rem; }
-.callout { background: var(--accent-soft); border-radius: var(--radius); padding: 0.75rem 1rem; margin-bottom: 1rem; }
-.back { text-decoration: none; font-weight: 600; font-size: 0.9rem; }
+.callout { background: #000000; color: #ffffff; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem 1rem; margin-bottom: 1rem; }
+.back { display: inline-block; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 0.85rem; padding: 0.25rem 0.65rem; border: 1px solid var(--border); border-radius: 8px; }
+.back:hover { border-color: #ffffff; }
 .you { margin-left: 0.4rem; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; background: var(--accent-soft); color: var(--accent); padding: 0.05rem 0.4rem; border-radius: 999px; vertical-align: middle; }
 
 /* ---------- home ---------- */
