@@ -31,7 +31,46 @@ npm test           # booster generation, analytics, API flow
 npm run typecheck
 ```
 
-## How it works
+## Deploy
+
+The repo includes a `Dockerfile` that builds the web app and serves everything from one Node process on port 8080.
+
+The app keeps pools and decks in a SQLite file, so the host **must provide a persistent volume mounted at `/data`**. Without one, every redeploy or restart wipes all pools.
+
+Settings (all have defaults in the Dockerfile):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PORT` | `8080` | Port to listen on (most hosts set this for you) |
+| `DB_PATH` | `/data/sealed.db` | Where the database lives; keep it on the volume |
+| `SET_CODE` | `trk` | Set to open pools from |
+
+The server needs outbound HTTPS to `api.scryfall.com`, and players' browsers load card images from `cards.scryfall.io`.
+
+### Railway (connects to this GitHub repo, redeploys on every push)
+
+1. In Railway, create a **New Project → Deploy from GitHub repo** and pick this repo. Railway builds the `Dockerfile` automatically.
+2. Open the service, then **Volumes → New Volume**, mounted at `/data`.
+3. Under **Settings → Networking**, click **Generate Domain** to get a public URL.
+
+### Fly.io
+
+```bash
+fly launch --no-deploy
+fly volumes create data --size 1
+```
+
+Add this to the generated `fly.toml`, then run `fly deploy`:
+
+```toml
+[mounts]
+  source = "data"
+  destination = "/data"
+```
+
+Keep the app on a single machine: SQLite lives on one volume and can't be shared between machines.
+
+
 
 - `server/` — Express + SQLite. Set card lists are fetched from [Scryfall](https://scryfall.com/docs/api) and cached for 7 days.
 - `shared/` — code used by both sides: booster collation (`booster.ts`), card helpers (`cards.ts`), and comparison analytics (`analytics.ts`).
