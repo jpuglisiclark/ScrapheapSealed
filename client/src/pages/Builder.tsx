@@ -201,7 +201,9 @@ interface DragState {
 }
 
 /** A "Sort by…" menu that re-sorts every time an option is picked (even the same one again). */
-function SortSelect({ label, options, onSort }: { label: string; options: [SortMode, string][]; onSort: (m: SortMode) => void }) {
+/** Shows the current sort; picking any option (even the current one) re-sorts. */
+function SortSelect({ label, current, options, onSort }: { label: string; current: SortMode; options: [SortMode, string][]; onSort: (m: SortMode) => void }) {
+  const currentLabel = options.find(([v]) => v === current)?.[1] ?? '…';
   return (
     <select
       className="sort-select"
@@ -211,8 +213,8 @@ function SortSelect({ label, options, onSort }: { label: string; options: [SortM
         if (e.target.value) onSort(e.target.value as SortMode);
       }}
     >
-      <option value="" disabled>
-        Sort by…
+      <option value="" disabled hidden>
+        Sort: {currentLabel}
       </option>
       {options.map(([v, l]) => (
         <option key={v} value={v}>
@@ -677,6 +679,7 @@ export default function Builder() {
                 <div className="zone-actions">
                   <SortSelect
                     label="Sort deck"
+                    current={deckMode}
                     options={[['cmc', 'Mana value'], ['color', 'Color']]}
                     onSort={(mode) => {
                       setDeckMode(mode);
@@ -746,7 +749,8 @@ export default function Builder() {
                 {!locked && (
                   <SortSelect
                     label="Sort sideboard"
-                    options={[['color', 'Color'], ['cmc', 'Mana value']]}
+                    current={sideMode}
+                    options={[['color', 'Color'], ['cmc', 'Mana value'], ['rarity', 'Rarity']]}
                     onSort={(mode) => {
                       setSideMode(mode);
                       setLayout({ ...layout, side: sortedColumns(sideCards, mode) });

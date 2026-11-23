@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moveCards, basicCard, basicsFromLayout, mainFromLayout, moveCard, nextBasicId, placeCard, reconcileLayout, removeCard } from '../shared/layout.ts';
+import { sortedColumns, moveCards, basicCard, basicsFromLayout, mainFromLayout, moveCard, nextBasicId, placeCard, reconcileLayout, removeCard } from '../shared/layout.ts';
 import { emptyBasics, type Layout, type Pool, type PoolCard } from '../shared/types.ts';
 import { card } from './fixtures.ts';
 
@@ -76,5 +76,11 @@ describe('layout', () => {
     expect(moveCards(l, ['a', 'b', 'basic-G-1'], { zone: 'deck', col: 2, index: 0 })).toEqual({ deck: [[], ['x'], ['a', 'b', 'basic-G-1']], side: [['c', 'd'], ['e']] });
     // to the sideboard: basics are dropped
     expect(moveCards(l, ['a', 'basic-G-1'], { zone: 'side', col: 1, index: 1 })).toEqual({ deck: [['b'], ['x']], side: [['c', 'd'], ['e', 'a']] });
+  });
+
+  it('sorts by rarity: mythic, rare, uncommon, common piles', () => {
+    const r = (uid: string, rarity: any, cmc: number) => ({ ...pc(uid, { name: uid, rarity, cmc }) });
+    const cards = [r('c1', 'common', 2), r('m1', 'mythic', 5), r('u1', 'uncommon', 1), r('r1', 'rare', 3), r('c2', 'common', 1)];
+    expect(sortedColumns(cards, 'rarity')).toEqual([['m1'], ['r1'], ['u1'], ['c2', 'c1']]);
   });
 });

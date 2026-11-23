@@ -1,8 +1,8 @@
 import { COLORS, emptyBasics, type Basics, type Color, type Layout, type Pool, type PoolCard } from './types.ts';
-import { BASIC_NAMES, colorGroup, curveBucket, isCreature, isLand } from './cards.ts';
+import { BASIC_NAMES, RARITY_ORDER, colorGroup, curveBucket, isCreature, isLand } from './cards.ts';
 
 export type Zone = 'deck' | 'side';
-export type SortMode = 'color' | 'cmc' | 'type';
+export type SortMode = 'color' | 'cmc' | 'type' | 'rarity';
 
 const BASIC_RE = /^basic-([WUBRG])-(\d+)$/;
 export const isBasicId = (uid: string) => BASIC_RE.test(uid);
@@ -37,6 +37,7 @@ const COLOR_ORDER = ['W', 'U', 'B', 'R', 'G', 'M', 'C', 'L'];
 export function sortKey(card: PoolCard, mode: SortMode): number {
   if (mode === 'color') return COLOR_ORDER.indexOf(colorGroup(card));
   if (mode === 'type') return isLand(card) ? 2 : isCreature(card) ? 0 : 1;
+  if (mode === 'rarity') return RARITY_ORDER[card.rarity] ?? 4; // mythic, rare, uncommon, common
   return isLand(card) ? 7 : curveBucket(card.cmc);
 }
 
