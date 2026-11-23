@@ -47,7 +47,22 @@ Settings (all have defaults in the Dockerfile):
 
 The server needs outbound HTTPS to `api.scryfall.com`, and players' browsers load card images from `cards.scryfall.io`.
 
-### Railway (connects to this GitHub repo, redeploys on every push)
+### Your own computer + Cloudflare Tunnel (free)
+
+The site runs on your computer and Cloudflare gives it a public HTTPS address. No router setup is needed. It's only up while your computer is on and `npm start` is running. Pools are stored in `data/sealed.db` in the project folder.
+
+```bash
+npm install
+npm run build
+npm start
+```
+
+That serves the whole site at http://localhost:3001. In a second terminal, install `cloudflared` (Windows: `winget install --id Cloudflare.cloudflared`), then either:
+
+- **Quick tunnel (no account):** run `cloudflared tunnel --url http://localhost:3001` and share the `https://….trycloudflare.com` address it prints. The address changes every time you restart it, which breaks old pool links and makes players lose track of their decks, so this is best for trying things out.
+- **Named tunnel (permanent address, needs a domain on Cloudflare):** in the Cloudflare dashboard go to Zero Trust → Networks → Tunnels → Create a tunnel (Cloudflared). Run the `cloudflared service install …` command it shows; that installs it as a Windows service that starts with your computer. Then add a public hostname (e.g. `sealed.yourdomain.com`) pointing to `http://localhost:3001`.
+
+ (connects to this GitHub repo, redeploys on every push)
 
 1. In Railway, create a **New Project → Deploy from GitHub repo** and pick this repo. Railway builds the `Dockerfile` automatically.
 2. Open the service, then **Volumes → New Volume**, mounted at `/data`.

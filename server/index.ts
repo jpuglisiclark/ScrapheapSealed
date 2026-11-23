@@ -18,7 +18,9 @@ const app = createApp({
   cards: scryfall,
   setCode,
   collation,
-  staticDir: process.env.NODE_ENV === 'production' ? path.resolve('dist') : undefined,
+  // Serve the built web app (from `npm run build`) when it exists. During `npm run dev` the
+  // site is served by Vite on port 5173 instead, so this is harmless there.
+  staticDir: path.resolve('dist'),
 });
 
 app.listen(port, () => console.log(`Scrapheap Sealed API listening on http://localhost:${port}`));
