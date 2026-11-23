@@ -26,6 +26,7 @@ import { ColorDots } from '../components/Mana.tsx';
 import { Curve, CurveLegend } from '../components/Curve.tsx';
 import { CopyButton } from './Lobby.tsx';
 import { useConfirm } from '../components/ConfirmDialog.tsx';
+import { RaresDialog } from '../components/RaresDialog.tsx';
 
 type SaveState = 'saved' | 'pending' | 'saving' | 'error';
 interface DeckMeta {
@@ -41,6 +42,22 @@ const MIN_CARD_W = typeof window !== 'undefined' && window.innerWidth < 640 ? 96
 const MAX_CARD_W = 240;
 const DEFAULT_SPLIT = 0.45;
 const MIN_DECK = 40;
+
+/** Whether this browser has already shown a deck's rares popup (storage may be unavailable). */
+function raresSeen(deckId: string) {
+  try {
+    return localStorage.getItem(`st:raresSeen:${deckId}`) === '1';
+  } catch {
+    return false;
+  }
+}
+function markRaresSeen(deckId: string) {
+  try {
+    localStorage.setItem(`st:raresSeen:${deckId}`, '1');
+  } catch {
+    /* storage unavailable */
+  }
+}
 
 /** Per-browser view preferences; storage can be unavailable, so every access is guarded. */
 function readNumber(key: string, ok: (v: number) => boolean, fallback: number) {
@@ -236,6 +253,7 @@ export default function Builder() {
   const suppressClick = useRef(false);
   const loaded = useRef(false);
   const [dialog, confirmInApp] = useConfirm();
+  const [showRares, setShowRares] = useState(false);
   layoutRef.current = layout;
 
   useEffect(() => {
@@ -245,6 +263,8 @@ export default function Builder() {
         setPool(p);
         setMeta({ playerName: d.playerName, notes: d.notes, submittedAt: d.submittedAt });
         setLayout(reconcileLayout(p, d.main, d.basics, d.layout));
+        // First time this player opens their pool: a deck nobody has arranged or added to yet.
+        if (!raresSeen(d.id) && !d.layout && d.main.length === 0 && !d.submittedAt) setShowRares(true);
       })
       .catch((e) => setError(e.message));
   }, [poolId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -524,7 +544,7 @@ export default function Builder() {
   // Show enough slots to fill the visible width, plus one spare so there's always room to the right.
   // As many slots as fit the visible width exactly, so there's no sideways scrolling unless
   // piles have been placed further right than fits (e.g. after making cards bigger).
-  const GAP = 9.6;
+  const GAP = 16; // keep in sync with .columns gap in styles.css
   const fit = (areaW: number) => Math.max(1, Math.floor((areaW - 4 + GAP) / (cardW + GAP)));
   const slotCount = (piles: number, areaW: number) => Math.max(piles, fit(areaW));
   const deckSlots = Array.from({ length: slotCount(layout.deck.length, deckAreaW) }, (_, i) => layout.deck[i] ?? []);
@@ -571,6 +591,15 @@ export default function Builder() {
   return (
     <main className={`builder ${dragging ? 'is-dragging' : ''}`} style={{ '--card-w': `${cardW}px` } as React.CSSProperties}>
       {dialog}
+      {showRares && (
+        <RaresDialog
+          cards={pool.cards}
+          onClose={() => {
+            markRaresSeen(me.deckId);
+            setShowRares(false);
+          }}
+        />
+      )}
       {ghostCard && (
         <div
           className="drag-ghost"
