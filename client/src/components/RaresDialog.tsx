@@ -34,10 +34,6 @@ export function RaresDialog({ cards, onClose }: { cards: PoolCard[]; onClose: ()
           {shown.map((c) => (
             <div key={c.uid} className="rare-item">
               <CardTile card={c} />
-              <span className={`rarity-tag ${c.rarity}`}>
-                {c.rarity === 'mythic' ? 'Mythic' : 'Rare'}
-                {c.foil ? ' · Foil' : ''}
-              </span>
             </div>
           ))}
         </div>

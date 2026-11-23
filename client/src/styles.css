@@ -485,7 +485,4 @@ textarea { resize: vertical; }
 .modal.wide { width: min(980px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
 .rares-grid { --card-w: 150px; display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card-w), 1fr)); gap: 14px; overflow: auto; padding: 4px 2px 8px; margin-bottom: 1rem; }
 .rare-item { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.rarity-tag { font-size: 0.78rem; font-weight: 700; color: var(--ink-2); }
-.rarity-tag.mythic { color: #d9622b; }
-.rarity-tag.rare { color: #b38f1f; }
 @media (max-width: 640px) { .rares-grid { --card-w: 110px; } }
