@@ -489,3 +489,12 @@ textarea { resize: vertical; }
 .rares-grid { --card-w: 150px; display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card-w), 1fr)); gap: 14px; overflow: auto; padding: 4px 2px 8px; margin-bottom: 1rem; }
 .rare-item { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 @media (max-width: 640px) { .rares-grid { --card-w: 110px; } }
+
+/* Comparison page: one row per deck, stats on the left, cards on the right */
+.deck-rows { display: flex; flex-direction: column; gap: 1rem; }
+.deck-row { --card-w: 104px; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.deck-info { display: flex; flex-direction: column; gap: 0.6rem; }
+.deck-info header h3 { margin: 0 0 0.15rem; font-size: 1.1rem; }
+.deck-info p { margin: 0; }
+.deck-row .deck-view .columns { gap: 12px; align-items: flex-start; }
+@media (max-width: 800px) { .deck-row { grid-template-columns: 1fr; } }

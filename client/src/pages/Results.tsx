@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api.ts';
 import { getIdentity } from '../identity.ts';
-import { COLORS, COLOR_NAMES, type Deck, type Pool, type PoolCard, type PoolWithDecks } from '../../../shared/types.ts';
+import { COLORS, type Deck, type Pool, type PoolCard, type PoolWithDecks } from '../../../shared/types.ts';
 import { basicCard } from '../../../shared/layout.ts';
 import { comparePool, headToHead, type CardConsensus, type DeckAnalysis } from '../../../shared/analytics.ts';
 import { CURVE_LABELS, curveBucket, isLand, GUILDS, MONO } from '../../../shared/cards.ts';
@@ -10,14 +10,12 @@ import { CardName, CardTile } from '../components/Card.tsx';
 import { ColorDots, ManaCost } from '../components/Mana.tsx';
 import { Curve, CurveLegend } from '../components/Curve.tsx';
 
-const pct = (x: number) => `${Math.round(x * 100)}%`;
-
+/** A submitted deck laid out in piles by mana value, then lands and basics. */
 function DeckView({ a, pool }: { a: DeckAnalysis; pool: Pool }) {
   const basics = COLORS.flatMap((c) => Array.from({ length: a.deck.basics[c] }, (_, i) => basicCard(pool, `basic-${c}-${i + 1}`)));
   const cols = [
     ...CURVE_LABELS.map((l, i) => ({ label: `${l} mana`, cards: a.spells.filter((c) => curveBucket(c.cmc) === i + 1) })),
-    { label: 'Lands', cards: a.cards.filter(isLand) },
-    { label: 'Basics', cards: basics },
+    { label: 'Lands', cards: [...a.cards.filter(isLand).sort((x, y) => x.name.localeCompare(y.name)), ...basics] },
   ].filter((c) => c.cards.length);
   return (
     <div className="deck-view">
@@ -28,7 +26,7 @@ function DeckView({ a, pool }: { a: DeckAnalysis; pool: Pool }) {
               {col.label} <span className="muted">{col.cards.length}</span>
             </div>
             <div className="stack">
-              {(col.label === 'Basics' ? col.cards : [...col.cards].sort((x, y) => x.cmc - y.cmc || x.name.localeCompare(y.name))).map((c) => (
+              {(col.label === 'Lands' ? col.cards : [...col.cards].sort((x, y) => x.cmc - y.cmc || x.name.localeCompare(y.name))).map((c) => (
                 <CardTile key={c.uid} card={c} />
               ))}
             </div>
@@ -39,9 +37,10 @@ function DeckView({ a, pool }: { a: DeckAnalysis; pool: Pool }) {
   );
 }
 
-function PlayerCard({ a, isMe, curveMax, open, onToggle }: { a: DeckAnalysis; isMe: boolean; curveMax: number; open: boolean; onToggle: () => void }) {
+/** Stats box shown to the left of each deck. */
+function DeckInfo({ a, isMe, curveMax }: { a: DeckAnalysis; isMe: boolean; curveMax: number }) {
   return (
-    <article className={`player-card panel ${open ? 'open' : ''}`}>
+    <div className="deck-info">
       <header>
         <h3>
           {a.deck.playerName}
@@ -58,87 +57,8 @@ function PlayerCard({ a, isMe, curveMax, open, onToggle }: { a: DeckAnalysis; is
         <div><dt>Lands</dt><dd>{a.lands}</dd></div>
         <div><dt>Avg MV</dt><dd>{a.avgCmc.toFixed(2)}</dd></div>
       </dl>
-      {a.rares.length > 0 && (
-        <p className="small">
-          <span className="muted">Rares played: </span>
-          {a.rares.map((r, i) => (
-            <span key={r.uid}>
-              {i > 0 && ', '}
-              <CardName card={r} />
-            </span>
-          ))}
-        </p>
-      )}
       {a.deck.notes && <blockquote className="notes">{a.deck.notes}</blockquote>}
-      {a.total !== 40 && <p className="small warn">{a.total}-card deck</p>}
-      <button className="btn small" onClick={onToggle} aria-expanded={open}>
-        {open ? 'Hide deck' : 'View deck'}
-      </button>
-    </article>
-  );
-}
-
-function ColorChoices({ data, n }: { data: ReturnType<typeof comparePool>['colors']; n: number }) {
-  return (
-    <div className="color-chart">
-      <div className="legend">
-        <span><i className="sw main" /> Main color</span>
-        <span><i className="sw splash" /> Splash</span>
-      </div>
-      {data.map((d) => (
-        <div className="color-row" key={d.color} title={`${COLOR_NAMES[d.color]}: main color in ${d.main} deck(s), splashed in ${d.splash}`}>
-          <span className="color-row-label">
-            <ColorDots colors={[d.color]} /> {COLOR_NAMES[d.color]}
-          </span>
-          <div className="color-track">
-            {d.main > 0 && <div className={`color-fill main c-${d.color}`} style={{ width: `${(d.main / n) * 100}%` }} />}
-            {d.splash > 0 && <div className={`color-fill splash c-${d.color}`} style={{ width: `${(d.splash / n) * 100}%` }} />}
-          </div>
-          <span className="color-row-value">
-            {d.main}
-            {d.splash ? ` + ${d.splash}` : ''} / {n}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Matrix({ analyses, matrix }: { analyses: DeckAnalysis[]; matrix: number[][] }) {
-  return (
-    <div className="matrix-wrap">
-      <table className="matrix">
-        <thead>
-          <tr>
-            <th />
-            {analyses.map((a) => (
-              <th key={a.deck.id} scope="col">{a.deck.playerName}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {analyses.map((a, i) => (
-            <tr key={a.deck.id}>
-              <th scope="row">{a.deck.playerName}</th>
-              {analyses.map((b, j) => {
-                const v = matrix[i][j];
-                return i === j ? (
-                  <td key={b.deck.id} className="diag">—</td>
-                ) : (
-                  <td
-                    key={b.deck.id}
-                    style={{ '--v': v } as React.CSSProperties}
-                    className={v > 0.55 ? 'strong' : ''}
-                    title={`${a.deck.playerName} & ${b.deck.playerName} share ${pct(v)} of their nonbasic cards`}
-                  >
-                    {pct(v)}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {a.total !== 40 && <p className="small muted">{a.total}-card deck</p>}
     </div>
   );
 }
@@ -196,71 +116,6 @@ function HeadToHead({ analyses, meIdx }: { analyses: DeckAnalysis[]; meIdx: numb
   );
 }
 
-type ConsensusFilter = 'all' | 'played' | 'split' | 'unplayed';
-
-function ConsensusTable({ rows, n }: { rows: CardConsensus[]; n: number }) {
-  const [f, setF] = useState<ConsensusFilter>('played');
-  const shown = rows.filter((r) =>
-    f === 'all' ? true : f === 'played' ? r.players.length > 0 : f === 'split' ? r.players.length > 0 && r.players.length < n : r.players.length === 0,
-  );
-  const tabs: [ConsensusFilter, string][] = [
-    ['played', 'Played by anyone'],
-    ['split', 'Split decisions'],
-    ['unplayed', 'Nobody played'],
-    ['all', 'Whole pool'],
-  ];
-  return (
-    <div>
-      <div className="tabs" role="tablist">
-        {tabs.map(([k, l]) => (
-          <button key={k} role="tab" aria-selected={f === k} className={f === k ? 'on' : ''} onClick={() => setF(k)}>
-            {l}
-          </button>
-        ))}
-      </div>
-      <div className="table-wrap">
-        <table className="consensus">
-          <thead>
-            <tr>
-              <th>Card</th>
-              <th className="hide-sm">Cost</th>
-              <th>Played by</th>
-              <th className="hide-sm">Who</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((r) => (
-              <tr key={r.name}>
-                <td>
-                  <CardName card={r.card} />
-                  {r.copiesInPool > 1 && <span className="muted small"> ×{r.copiesInPool}</span>}
-                  <span className={`rarity-dot ${r.card.rarity}`} title={r.card.rarity} />
-                </td>
-                <td className="hide-sm"><ManaCost cost={r.card.manaCost} /></td>
-                <td>
-                  <div className="incl" title={`${r.players.length} of ${n} decks`}>
-                    <div className="incl-track"><div className="incl-fill" style={{ width: `${r.rate * 100}%` }} /></div>
-                    <span>{r.players.length}/{n}</span>
-                  </div>
-                </td>
-                <td className="hide-sm who">
-                  {r.players.map((p) => (
-                    <span key={p.deckId} className="chip">
-                      {p.playerName}
-                      {p.count > 1 ? ` ×${p.count}` : ''}
-                    </span>
-                  ))}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {shown.length === 0 && <p className="muted">No cards here.</p>}
-      </div>
-    </div>
-  );
-}
-
 function Highlight({ title, hint, items }: { title: string; hint: string; items: CardConsensus[] }) {
   return (
     <div className="highlight panel">
@@ -288,7 +143,6 @@ export default function Results() {
   const me = getIdentity(poolId);
   const [data, setData] = useState<{ pool: PoolWithDecks; decks: Deck[] } | null>(null);
   const [error, setError] = useState<{ status: number; message: string } | null>(null);
-  const [openDeck, setOpenDeck] = useState<string | null>(null);
 
   useEffect(() => {
     if (!me) return;
@@ -329,7 +183,6 @@ export default function Results() {
   }
   const [topPair] = [...pairCounts.entries()].sort((x, y) => y[1] - x[1]);
   const topPairName = topPair ? (topPair[0].length === 1 ? MONO[topPair[0] as keyof typeof MONO] : GUILDS[topPair[0]] ?? topPair[0]) : '—';
-  const opened = cmp.analyses.find((a) => a.deck.id === openDeck);
 
   return (
     <main className="page results">
@@ -347,19 +200,9 @@ export default function Results() {
 
       <div className="tiles">
         <div className="tile"><span className="tile-n">{n}</span><span className="tile-l">decks submitted</span></div>
-        {n > 1 && (
-          <div className="tile" title="Average share of nonbasic cards any two decks have in common">
-            <span className="tile-n">{pct(cmp.agreement)}</span>
-            <span className="tile-l">average overlap between decks</span>
-          </div>
-        )}
         <div className="tile">
           <span className="tile-n">{topPairName}</span>
           <span className="tile-l">{topPair && topPair[1] > 1 ? `most popular (${topPair[1]} decks)` : 'most popular colors'}</span>
-        </div>
-        <div className="tile">
-          <span className="tile-n">{cmp.consensus.filter((c) => c.players.length === 0 && !isLand(c.card)).length}</span>
-          <span className="tile-l">spells nobody played</span>
         </div>
       </div>
 
@@ -370,51 +213,21 @@ export default function Results() {
           <h2>The decks</h2>
           <CurveLegend />
         </div>
-        <div className="player-grid">
+        <div className="deck-rows">
           {ordered.map((a) => (
-            <PlayerCard
-              key={a.deck.id}
-              a={a}
-              isMe={a.deck.id === me.deckId}
-              curveMax={curveMax}
-              open={openDeck === a.deck.id}
-              onToggle={() => setOpenDeck(openDeck === a.deck.id ? null : a.deck.id)}
-            />
+            <article key={a.deck.id} className="deck-row panel">
+              <DeckInfo a={a} isMe={a.deck.id === me.deckId} curveMax={curveMax} />
+              <DeckView a={a} pool={pool} />
+            </article>
           ))}
         </div>
-        {opened && (
-          <div className="panel opened-deck">
-            <div className="panel-head">
-              <h3>{opened.deck.playerName}’s deck — {opened.archetype}</h3>
-              <button className="btn small" onClick={() => setOpenDeck(null)}>Close</button>
-            </div>
-            <DeckView a={opened} pool={pool} />
-          </div>
-        )}
       </section>
 
-      {n > 1 && (
+      {cmp.divisive.length > 0 && (
         <section className="highlights">
-          <Highlight title="Everyone played" hint="Cards that made every deck." items={cmp.unanimous} />
-          {cmp.divisive.length > 0 && <Highlight title="Most divisive" hint="Cards closest to a 50/50 split." items={cmp.divisive} />}
-          <Highlight title="Unique picks" hint="Cards only one builder played." items={cmp.uniquePicks} />
-          <Highlight title="Benched rares" hint="Rares and mythics nobody played." items={cmp.benchedRares} />
+          <Highlight title="Most divisive" hint="Cards closest to a 50/50 split." items={cmp.divisive} />
         </section>
       )}
-
-      <div className="two-col">
-        <section className="panel">
-          <h2>Color choices</h2>
-          <ColorChoices data={cmp.colors} n={n} />
-        </section>
-        {n > 1 && (
-          <section className="panel">
-            <h2>Deck overlap</h2>
-            <p className="muted small">Share of nonbasic cards each pair of decks has in common.</p>
-            <Matrix analyses={cmp.analyses} matrix={cmp.matrix} />
-          </section>
-        )}
-      </div>
 
       {n > 1 && (
         <section className="panel">
@@ -423,14 +236,9 @@ export default function Results() {
         </section>
       )}
 
-      <section className="panel">
-        <h2>Card by card</h2>
-        <ConsensusTable rows={cmp.consensus} n={n} />
-      </section>
-
       <p className="muted small">
-        Basic lands are excluded from overlap and card stats. A color counts as “main” when it has at least 5 of a deck’s spells
-        (fewer for small decks); anything less is a splash.
+        A color counts as “main” when it has at least 5 of a deck’s spells (fewer for small decks); anything less is a splash.
+        Hybrid cards that a deck can cast with one of its main colors don’t count as a splash.
       </p>
     </main>
   );

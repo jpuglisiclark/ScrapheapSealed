@@ -44,6 +44,28 @@ describe('cards helpers', () => {
   });
 });
 
+describe('splash detection', () => {
+  const spell = (uid: string, colors: any[], manaCost: string) => pc(uid, { name: uid, colors, manaCost, cmc: 2 });
+  const deckOf = (cards: PoolCard[]) => {
+    const p: Pool = { ...pool, cards };
+    return analyzeDeck(p, deck('x', cards.map((c) => c.uid)));
+  };
+  const rakdos = [...Array(6)].map((_, i) => spell(`b${i}`, ['B'], '{1}{B}')).concat([...Array(6)].map((_, i) => spell(`r${i}`, ['R'], '{1}{R}')));
+  it('a hybrid card payable with a main color is not a splash', () => {
+    const a = deckOf([...rakdos, spell('hy', ['B', 'G'], '{B/G}{B/G}')]);
+    expect(a.mainColors).toEqual(['B', 'R']);
+    expect(a.splashColors).toEqual([]);
+    expect(a.archetype).toBe('Rakdos');
+  });
+  it('a hybrid card with no main color, or a plain off-color card, is a splash', () => {
+    expect(deckOf([...rakdos, spell('hy', ['W', 'G'], '{W/G}')]).splashColors).toEqual(['W', 'G']);
+    expect(deckOf([...rakdos, spell('g', ['G'], '{2}{G}')]).archetype).toBe('Rakdos splash G');
+  });
+  it('a {2/W} style symbol needs no color', () => {
+    expect(deckOf([...rakdos, spell('tw', ['W'], '{2/W}{2/W}')]).splashColors).toEqual([]);
+  });
+});
+
 describe('analytics', () => {
   const a = deck('a', ['1', '2', '3', '5'], { ...emptyBasics(), G: 9, R: 7 });
   const b = deck('b', ['1', '4']);

@@ -1,4 +1,4 @@
-import { COLORS, type Color, type Deck, type Pool, type PoolCard } from './types.ts';
+import { COLORS, type CardTemplate, type Color, type Deck, type Pool, type PoolCard } from './types.ts';
 import {
   archetypeName,
   basicsCount,
@@ -44,7 +44,7 @@ export function analyzeDeck(pool: Pool, deck: Deck): DeckAnalysis {
     if (isCreature(c)) creatureCurve[curveBucket(c.cmc) - 1]++;
     for (const col of cardColors(c)) colorCounts[col]++;
   }
-  const { main, splash } = classifyColors(colorCounts, spells.length);
+  const { main, splash } = classifyColors(colorCounts, spells.length, spells);
   const creatures = spells.filter(isCreature).length;
   return {
     deck,
@@ -70,15 +70,40 @@ export function analyzeDeck(pool: Pool, deck: Deck): DeckAnalysis {
  * A color is "main" if it has a meaningful share of the spells (>= 5, or >= 20% for small decks).
  * Colors with fewer spells are splashes.
  */
-export function classifyColors(counts: Record<Color, number>, spellCount: number) {
+export function classifyColors(counts: Record<Color, number>, spellCount: number, spells?: CardTemplate[]) {
   const threshold = Math.max(3, Math.min(5, Math.ceil(spellCount * 0.2)));
   let main = COLORS.filter((c) => counts[c] >= threshold);
   if (main.length === 0) {
     const max = Math.max(...COLORS.map((c) => counts[c]));
     if (max > 0) main = COLORS.filter((c) => counts[c] === max);
   }
-  const splash = COLORS.filter((c) => !main.includes(c) && counts[c] > 0);
+  // Splash colors: off-colors some spell actually needs. With the spells known, hybrid symbols
+  // a main color can pay (e.g. {B/G} in a black deck) don't make a splash.
+  const splash = spells
+    ? [...new Set(spells.flatMap((c) => colorsNeeded(c, main)))].filter((c) => !main.includes(c))
+    : COLORS.filter((c) => !main.includes(c) && counts[c] > 0);
   return { main: sortColors(main), splash: sortColors(splash) };
+}
+
+const isColor = (x: string): x is Color => (COLORS as string[]).includes(x);
+
+/**
+ * Colors outside `main` that a spell's (front face) mana cost forces you to have.
+ * A hybrid symbol is covered if any of its colors is a main color; a symbol with a generic
+ * alternative like {2/W} needs no color at all.
+ */
+export function colorsNeeded(card: CardTemplate, main: Color[]): Color[] {
+  const symbols = [...card.manaCost.split('//')[0].matchAll(/\{([^}]+)\}/g)].map((m) => m[1].toUpperCase().split('/'));
+  const colored = symbols.filter((parts) => parts.some(isColor));
+  if (colored.length === 0) return cardColors(card).filter((c) => !main.includes(c));
+  const need = new Set<Color>();
+  for (const parts of colored) {
+    if (parts.some((p) => /^\d+$/.test(p))) continue;
+    const cols = parts.filter(isColor);
+    if (cols.some((c) => main.includes(c))) continue;
+    cols.forEach((c) => need.add(c));
+  }
+  return [...need];
 }
 
 /** Name → count, nonbasic cards only. */
