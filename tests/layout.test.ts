@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sortedColumns, moveCards, basicCard, basicsFromLayout, mainFromLayout, moveCard, nextBasicId, placeCard, reconcileLayout, removeCard } from '../shared/layout.ts';
+import { groupBasics, sortedColumns, moveCards, basicCard, basicsFromLayout, mainFromLayout, moveCard, nextBasicId, placeCard, reconcileLayout, removeCard } from '../shared/layout.ts';
 import { emptyBasics, type Layout, type Pool, type PoolCard } from '../shared/types.ts';
 import { card } from './fixtures.ts';
 
@@ -99,5 +99,14 @@ describe('layout', () => {
     expect(l.deck).toEqual([['one'], ['two'], ['three'], ['four'], ['five'], ['six']]);
     l = placeCard(l, 'deck', g('twoB'), 'cmc', g); // joins its pile, ordered by mana value then name
     expect(l.deck[1]).toEqual(['two', 'twoB']);
+  });
+
+  it('groups basics of the same color in a pile into one entry', () => {
+    expect(groupBasics(['a', 'basic-U-1', 'b', 'basic-U-2', 'basic-W-1', 'basic-U-3'])).toEqual([
+      { uid: 'a', ids: ['a'] },
+      { uid: 'basic-U-1', ids: ['basic-U-1', 'basic-U-2', 'basic-U-3'] },
+      { uid: 'b', ids: ['b'] },
+      { uid: 'basic-W-1', ids: ['basic-W-1'] },
+    ]);
   });
 });

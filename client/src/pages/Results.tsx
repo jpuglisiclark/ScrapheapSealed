@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api.ts';
 import { getIdentity } from '../identity.ts';
 import { COLORS, COLOR_NAMES, type Color, type Deck, type Pool, type PoolWithDecks } from '../../../shared/types.ts';
-import { basicCard } from '../../../shared/layout.ts';
+import { basicCard, groupBasics } from '../../../shared/layout.ts';
 import { comparePool, type DeckAnalysis } from '../../../shared/analytics.ts';
 import { CURVE_LABELS, curveBucket, isLand } from '../../../shared/cards.ts';
 import { CardTile } from '../components/Card.tsx';
@@ -28,9 +28,16 @@ function DeckView({ a, pool }: { a: DeckAnalysis; pool: Pool }) {
               {col.label} <span className="muted">{col.cards.length}</span>
             </div>
             <div className="stack">
-              {(col.label === 'Lands' ? col.cards : [...col.cards].sort((x, y) => x.cmc - y.cmc || x.name.localeCompare(y.name))).map((c) => (
-                <CardTile key={c.uid} card={c} />
-              ))}
+              {col.label === 'Lands'
+                ? // Basics of one color show once, with a count
+                  groupBasics(col.cards.map((c) => c.uid)).map(({ uid, ids }) => (
+                    <CardTile
+                      key={uid}
+                      card={col.cards.find((c) => c.uid === uid)!}
+                      badge={ids.length > 1 ? <span className="count-badge">×{ids.length}</span> : undefined}
+                    />
+                  ))
+                : [...col.cards].sort((x, y) => x.cmc - y.cmc || x.name.localeCompare(y.name)).map((c) => <CardTile key={c.uid} card={c} />)}
             </div>
           </div>
         ))}
@@ -79,13 +86,13 @@ function DeckInfo({ a, isMe, curveMax }: { a: DeckAnalysis; isMe: boolean; curve
         <div><dt>Lands</dt><dd>{a.lands}</dd></div>
         <div><dt>Avg MV</dt><dd>{a.avgCmc.toFixed(2)}</dd></div>
       </dl>
-      {a.deck.notes && <blockquote className="notes">{a.deck.notes}</blockquote>}
       {a.deck.rating !== null && (
         <p className="pool-rating" title={`${a.deck.playerName} rated the pool ${a.deck.rating} out of 10`}>
           Pool rating <b>{a.deck.rating}</b>
           <span className="muted">/10</span>
         </p>
       )}
+      {a.deck.notes && <blockquote className="notes">{a.deck.notes}</blockquote>}
       {a.total !== 40 && <p className="small muted">{a.total}-card deck</p>}
     </div>
   );
@@ -151,6 +158,8 @@ export default function Results() {
   const ordered = [...cmp.analyses].sort((x, y) => Number(y.deck.id === me.deckId) - Number(x.deck.id === me.deckId));
   const curveMax = Math.max(...cmp.analyses.flatMap((a) => a.curve));
   const pending = pool.decks.filter((d) => !d.submittedAt);
+  const ratings = cmp.analyses.map((x) => x.deck.rating).filter((r): r is number => r !== null);
+  const avgRating = ratings.length ? ratings.reduce((t, r) => t + r, 0) / ratings.length : 0;
 
   return (
     <main className="page results">
@@ -158,7 +167,7 @@ export default function Results() {
       <div className="results-head">
         <div>
           <Link to="/?tab=past" className="back">← Past pools</Link>
-          <h1>How everyone built {pool.setName}</h1>
+          <h1>How everyone built this pool</h1>
           {pending.length > 0 && (
             <p className="muted">
               Still building: {pending.map((d) => d.playerName).join(', ')}. Refresh later to see their decks.
@@ -173,9 +182,17 @@ export default function Results() {
         </div>
       </div>
 
-      <p className="submitted-count">
-        <b>{n}</b> {n === 1 ? 'deck' : 'decks'} submitted
-      </p>
+      <div className="results-summary">
+        <p className="submitted-count">
+          <b>{n}</b> {n === 1 ? 'deck' : 'decks'} submitted
+        </p>
+        {ratings.length > 0 && (
+          <p className="avg-rating" title={`Average of ${ratings.length} ${ratings.length === 1 ? 'rating' : 'ratings'}: ${ratings.join(', ')}`}>
+            Average pool rating <b>{avgRating.toFixed(1)}</b>
+            <span className="muted">/10</span>
+          </p>
+        )}
+      </div>
 
       <div className="color-charts">
         <ColorBars title="Main colors" counts={cmp.colors.map((c) => ({ color: c.color, count: c.main }))} n={n} />

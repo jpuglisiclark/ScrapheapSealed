@@ -232,3 +232,24 @@ export function sanitizeLayout(v: unknown): Layout | null {
   const l = v as Record<string, unknown>;
   return { deck: cols(l.deck), side: cols(l.side) };
 }
+
+/**
+ * Basic lands of the same color in a pile show as one card with a count;
+ * every other card is its own entry. `ids` are all the cards an entry stands for.
+ */
+export function groupBasics(uids: string[]): { uid: string; ids: string[] }[] {
+  const out: { uid: string; ids: string[] }[] = [];
+  const byColor = new Map<string, { uid: string; ids: string[] }>();
+  for (const u of uids) {
+    const color = basicColor(u);
+    const existing = color && byColor.get(color);
+    if (existing) existing.ids.push(u);
+    else {
+      const entry = { uid: u, ids: [u] };
+      out.push(entry);
+      if (color) byColor.set(color, entry);
+    }
+  }
+  return out;
+}
+

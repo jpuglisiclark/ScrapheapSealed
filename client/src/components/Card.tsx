@@ -11,10 +11,12 @@ interface Props {
   onDragPointerDown?: (e: React.PointerEvent) => void;
   dragging?: boolean;
   selected?: boolean;
+  /** All card ids this tile stands for (a stack of identical basics). */
+  group?: string[];
 }
 
 /** A single card image (with text fallback) that shows the large preview on hover. */
-export function CardTile({ card, onClick, label, badge, dim, onDragPointerDown, dragging, selected }: Props) {
+export function CardTile({ card, onClick, label, badge, dim, onDragPointerDown, dragging, selected, group }: Props) {
   const { show, hide } = usePreview();
   const inner = card.image ? (
     <img src={card.image} alt={card.name} loading="lazy" draggable={false} />
@@ -26,6 +28,7 @@ export function CardTile({ card, onClick, label, badge, dim, onDragPointerDown, 
     className: cls,
     'data-uid': card.uid,
     'data-name': card.name,
+    'data-group': group && group.length > 1 ? group.join(',') : undefined,
     onPointerEnter: (e: React.PointerEvent) => show(card, e),
     onPointerMove: (e: React.PointerEvent) => show(card, e),
     onPointerLeave: hide,

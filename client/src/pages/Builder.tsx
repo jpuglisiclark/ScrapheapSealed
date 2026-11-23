@@ -9,6 +9,7 @@ import {
   basicCard,
   basicColor,
   basicsFromLayout,
+  groupBasics,
   isBasicId,
   layoutOrder,
   mainFromLayout,
@@ -91,8 +92,8 @@ interface PileProps {
   draggingSet: Set<string>;
   selected: Set<string>;
   hint: DropHint | null;
-  onCardClick: (c: PoolCard, e: React.MouseEvent) => void;
-  onDragPointerDown: (uid: string, e: React.PointerEvent) => void;
+  onCardClick: (c: PoolCard, e: React.MouseEvent, ids: string[]) => void;
+  onDragPointerDown: (uid: string, e: React.PointerEvent, ids: string[]) => void;
   onPileDragPointerDown: (uids: string[], e: React.PointerEvent) => void;
 }
 
@@ -109,16 +110,18 @@ function Pile({ zone, col, visible, getCard, locked, draggingSet, selected, hint
         {visible.length ? `${visible.length} ${visible.length === 1 ? 'card' : 'cards'}` : '\u00a0'}
       </div>
       <div className="stack">
-        {visible.map((u) => {
+        {groupBasics(visible).map(({ uid: u, ids }) => {
           const c = getCard(u);
           return (
             <CardTile
               key={u}
               card={c}
-              onClick={locked ? undefined : (e) => onCardClick(c, e)}
-              onDragPointerDown={locked ? undefined : (e) => onDragPointerDown(u, e)}
-              dragging={draggingSet.has(u)}
-              selected={selected.has(u)}
+              group={ids}
+              onClick={locked ? undefined : (e) => onCardClick(c, e, ids)}
+              onDragPointerDown={locked ? undefined : (e) => onDragPointerDown(u, e, ids)}
+              dragging={ids.some((id) => draggingSet.has(id))}
+              selected={ids.some((id) => selected.has(id))}
+              badge={ids.length > 1 ? <span className="count-badge">×{ids.length}</span> : undefined}
             />
           );
         })}
@@ -213,7 +216,7 @@ function cardsInBox(root: HTMLElement, box: Box): string[] {
         const bottom = Math.min(i + 1 < tiles.length ? tiles[i + 1].getBoundingClientRect().top : r.bottom, clip.bottom);
         const left = Math.max(r.left, clip.left);
         const right = Math.min(r.right, clip.right);
-        if (bottom > top && right > left && left < b.right && right > b.left && top < b.bottom && bottom > b.top) hits.push(t.dataset.uid!);
+        if (bottom > top && right > left && left < b.right && right > b.left && top < b.bottom && bottom > b.top) hits.push(...(t.dataset.group ?? t.dataset.uid!).split(','));
       });
     }
   }
@@ -397,10 +400,10 @@ export default function Builder() {
    * across browsers). A press only turns into a drag after the mouse moves a few pixels,
    * so plain clicks still work. Dragging a selected card moves the whole selection.
    */
-  function onDragPointerDown(uid: string, e: React.PointerEvent) {
+  function onDragPointerDown(uid: string, e: React.PointerEvent, ids: string[] = [uid]) {
     if (e.button !== 0 || e.pointerType === 'touch' || e.shiftKey || e.ctrlKey || e.metaKey) return;
-    const keep = selected.has(uid);
-    startDrag(keep ? layoutOrder(layoutRef.current!).filter((u) => selected.has(u)) : [uid], keep, e);
+    const keep = ids.some((id) => selected.has(id));
+    startDrag(keep ? layoutOrder(layoutRef.current!).filter((u) => selected.has(u)) : ids, keep, e);
   }
   /** Dragging a pile's "N cards" label moves the whole pile. */
   function onPileDragPointerDown(uids: string[], e: React.PointerEvent) {
@@ -567,18 +570,21 @@ export default function Builder() {
     }
     setLayout(next);
   }
-  const onCardClick = (c: PoolCard, e: React.MouseEvent) => {
+  const onCardClick = (c: PoolCard, e: React.MouseEvent, ids: string[] = [c.uid]) => {
     if (suppressClick.current) return;
+    const isSelected = ids.some((id) => selected.has(id));
     if (e.shiftKey || e.ctrlKey || e.metaKey) {
-      // Modifier-click adds or removes a card from the selection.
+      // Modifier-click adds or removes a card (or a stack of basics) from the selection.
       const next = new Set(selected);
-      if (next.has(c.uid)) next.delete(c.uid);
-      else next.add(c.uid);
+      for (const id of ids) {
+        if (isSelected) next.delete(id);
+        else next.add(id);
+      }
       setSelected(next);
       return;
     }
-    if (selected.has(c.uid) && selected.size > 1) sendAcross(layoutOrder(layout).filter((u) => selected.has(u)));
-    else sendAcross([c.uid]);
+    if (isSelected && selected.size > ids.length) sendAcross(layoutOrder(layout).filter((u) => selected.has(u)));
+    else sendAcross([ids[ids.length - 1]]); // a stack of basics loses one copy per click
     setSelected(new Set());
   };
   const addBasic = (col: Color) => setLayout(placeCard(layout, 'deck', basicCard(pool, nextBasicId(layout, col)), deckMode, getCard));
@@ -860,9 +866,6 @@ export default function Builder() {
                   <span className="pip-label">
                     <ColorDots colors={[c]} /> {BASIC_NAMES[c]}
                   </span>
-                  <span className="pip-share" title={`${COLOR_NAMES[c]} is ${pipSum ? Math.round((pipTotals[c] / pipSum) * 100) : 0}% of the colored mana symbols in your deck`}>
-                    {pipSum && pipTotals[c] ? `${Math.round((pipTotals[c] / pipSum) * 100)}%` : ''}
-                  </span>
                   <span className="stepper">
                     <button type="button" disabled={locked || basics[c] === 0} onClick={() => removeBasic(c)} aria-label={`Remove a ${BASIC_NAMES[c]}`}>
                       −
@@ -875,6 +878,30 @@ export default function Builder() {
                 </li>
               ))}
             </ul>
+          </section>
+
+          <section className="panel">
+            <h3>Deck colors</h3>
+            {pipSum === 0 ? (
+              <p className="muted small">Add colored spells to see their mana symbols here.</p>
+            ) : (
+              <ul className="color-shares">
+                {COLORS.filter((c) => pipTotals[c] > 0).map((c) => {
+                  const share = Math.round((pipTotals[c] / pipSum) * 100);
+                  return (
+                    <li key={c} title={`${COLOR_NAMES[c]} is ${share}% of the colored mana symbols in your deck`}>
+                      <span className="pip-label">
+                        <ColorDots colors={[c]} /> {COLOR_NAMES[c]}
+                      </span>
+                      <span className="share-track">
+                        <span className={`share-fill c-${c}`} style={{ width: `${share}%` }} />
+                      </span>
+                      <span className="share-n">{share}%</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </section>
 
           <section className="panel">
