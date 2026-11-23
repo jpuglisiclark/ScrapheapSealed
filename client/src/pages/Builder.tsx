@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { api } from '../api.ts';
 import { getIdentity } from '../identity.ts';
@@ -246,6 +246,21 @@ export default function Builder() {
   const hintRef = useRef<DropHint | null>(null);
   const layoutRef = useRef<Layout | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
+  const [tableH, setTableH] = useState<number | null>(null);
+  // Size the deck/sideboard window to reach the bottom of the browser window exactly,
+  // whatever sits above it (header, top bar, the "submitted" notice).
+  useLayoutEffect(() => {
+    const fit = () => {
+      const el = tableRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      const h = Math.max(420, Math.floor(window.innerHeight - top - 16));
+      setTableH((prev) => (prev === h ? prev : h));
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  });
   const deckAreaRef = useRef<HTMLDivElement>(null);
   const sideAreaRef = useRef<HTMLDivElement>(null);
   const deckAreaW = useWidth(deckAreaRef);
@@ -648,7 +663,7 @@ export default function Builder() {
       )}
 
       <div className="builder-body">
-        <div className="table" ref={tableRef}>
+        <div className="table" ref={tableRef} style={tableH && window.innerWidth > 980 ? { height: tableH } : undefined}>
           <section className="pane deck-pane" style={{ height: `calc((100% - 12px) * ${split})` }}>
             <div className="pane-head">
               <h2>

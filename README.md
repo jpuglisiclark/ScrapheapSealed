@@ -1,4 +1,4 @@
-# Sealed Together
+# Scrapheap Sealed
 
 Collaborative Magic: The Gathering sealed deck building.
 

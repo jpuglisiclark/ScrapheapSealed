@@ -120,32 +120,13 @@ function PastPools() {
 }
 
 export default function Home() {
-  const [params, setParams] = useSearchParams();
+  // The New / Past switch lives in the site header (App.tsx); it sets ?tab=past.
+  const [params] = useSearchParams();
   const tab: Tab = params.get('tab') === 'past' ? 'past' : 'new';
-  const tabs: [Tab, string][] = [
-    ['new', 'New Sealed Pool'],
-    ['past', 'Past Sealed Pools'],
-  ];
   return (
     <main className="page home">
-      <div className="tabs page-tabs" role="tablist">
-        {tabs.map(([k, label]) => (
-          <button
-            key={k}
-            role="tab"
-            id={`tab-${k}`}
-            aria-selected={tab === k}
-            aria-controls={`panel-${k}`}
-            className={tab === k ? 'on' : ''}
-            onClick={() => setParams(k === 'new' ? {} : { tab: k })}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {tab === 'new' ? <NewPool /> : <PastPools />}
-      </div>
+      <h1 className="visually-hidden">{tab === 'new' ? 'New Sealed Pool' : 'Past Sealed Pools'}</h1>
+      {tab === 'new' ? <NewPool /> : <PastPools />}
       <footer className="fineprint">
         Card data and images from Scryfall. Booster collation is an approximation. Not affiliated with Wizards of the Coast.
       </footer>

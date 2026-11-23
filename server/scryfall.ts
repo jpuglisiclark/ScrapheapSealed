@@ -2,7 +2,7 @@ import type { BasicLands, CardTemplate, Color, Rarity, SetInfo } from '../shared
 import { BASIC_NAMES } from '../shared/cards.ts';
 
 const API = 'https://api.scryfall.com';
-const HEADERS = { 'User-Agent': 'SealedTogether/0.1', Accept: 'application/json' };
+const HEADERS = { 'User-Agent': 'ScrapheapSealed/0.1', Accept: 'application/json' };
 const ALLOWED_SET_TYPES = new Set(['expansion', 'core', 'draft_innovation', 'masters']);
 
 let lastRequest = 0;
