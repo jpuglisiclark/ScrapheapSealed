@@ -66,6 +66,7 @@ export function createApp({ db, cards, staticDir, setCacheMs = 7 * 24 * 3600 * 1
     basics: JSON.parse(r.basics),
     notes: r.notes,
     layout: r.layout ? JSON.parse(r.layout) : null,
+    rating: r.rating ?? null,
     submittedAt: r.submitted_at,
     updatedAt: r.updated_at,
   });
@@ -215,6 +216,12 @@ export function createApp({ db, cards, staticDir, setCacheMs = 7 * 24 * 3600 * 1
       }
       const layout = body.layout !== undefined ? sanitizeLayout(body.layout) : deck.layout;
       const notes = typeof body.notes === 'string' ? body.notes.slice(0, 2000) : deck.notes;
+      let rating = deck.rating;
+      if (body.rating !== undefined) {
+        const r = Number(body.rating);
+        if (!Number.isInteger(r) || r < 1 || r > 10) throw new HttpError(400, 'Rating must be a whole number from 1 to 10');
+        rating = r;
+      }
       const playerName = body.playerName !== undefined ? cleanName(body.playerName) : deck.playerName;
       let submittedAt = deck.submittedAt;
       if (submit === true) {
@@ -224,10 +231,11 @@ export function createApp({ db, cards, staticDir, setCacheMs = 7 * 24 * 3600 * 1
       }
       if (submit === false) submittedAt = null;
 
-      db.prepare('UPDATE decks SET main = ?, basics = ?, layout = ?, notes = ?, player_name = ?, submitted_at = ?, updated_at = ? WHERE id = ?').run(
+      db.prepare('UPDATE decks SET main = ?, basics = ?, layout = ?, rating = ?, notes = ?, player_name = ?, submitted_at = ?, updated_at = ? WHERE id = ?').run(
         JSON.stringify(main),
         JSON.stringify(basics),
         layout ? JSON.stringify(layout) : null,
+        rating,
         notes,
         playerName,
         submittedAt,

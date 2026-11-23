@@ -103,6 +103,8 @@ export interface Deck {
   basics: Basics;
   notes: string;
   layout: Layout | null;
+  /** The player's rating of the pool, 1–10, given when submitting. */
+  rating: number | null;
   submittedAt: string | null;
   updatedAt: string;
 }

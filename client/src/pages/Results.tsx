@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api.ts';
 import { getIdentity } from '../identity.ts';
-import { COLORS, type Deck, type Pool, type PoolCard, type PoolWithDecks } from '../../../shared/types.ts';
+import { COLORS, COLOR_NAMES, type Color, type Deck, type Pool, type PoolWithDecks } from '../../../shared/types.ts';
 import { basicCard } from '../../../shared/layout.ts';
-import { comparePool, headToHead, type DeckAnalysis } from '../../../shared/analytics.ts';
-import { CURVE_LABELS, curveBucket, isLand, GUILDS, MONO } from '../../../shared/cards.ts';
-import { CardName, CardTile } from '../components/Card.tsx';
-import { ColorDots, ManaCost } from '../components/Mana.tsx';
+import { comparePool, type DeckAnalysis } from '../../../shared/analytics.ts';
+import { CURVE_LABELS, curveBucket, isLand } from '../../../shared/cards.ts';
+import { CardTile } from '../components/Card.tsx';
+import { ColorDots } from '../components/Mana.tsx';
 import { Curve, CurveLegend } from '../components/Curve.tsx';
 import { useConfirm } from '../components/ConfirmDialog.tsx';
 import { CopyButton } from './Lobby.tsx';
@@ -40,6 +40,26 @@ function DeckView({ a, pool }: { a: DeckAnalysis; pool: Pool }) {
 }
 
 /** Stats box shown to the left of each deck. */
+/** Bar chart: how many decks used each color (as a main color, or as a splash). */
+function ColorBars({ title, counts, n }: { title: string; counts: { color: Color; count: number }[]; n: number }) {
+  return (
+    <section className="panel color-chart">
+      <h2>{title}</h2>
+      {counts.map(({ color, count }) => (
+        <div className="color-row" key={color} title={`${COLOR_NAMES[color]}: ${count} of ${n} decks`}>
+          <span className="color-row-label">
+            <ColorDots colors={[color]} /> {COLOR_NAMES[color]}
+          </span>
+          <div className="color-track">{count > 0 && <div className={`color-fill main c-${color}`} style={{ width: `${(count / n) * 100}%` }} />}</div>
+          <span className="color-row-value">
+            {count} / {n}
+          </span>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 function DeckInfo({ a, isMe, curveMax }: { a: DeckAnalysis; isMe: boolean; curveMax: number }) {
   return (
     <div className="deck-info">
@@ -60,63 +80,17 @@ function DeckInfo({ a, isMe, curveMax }: { a: DeckAnalysis; isMe: boolean; curve
         <div><dt>Avg MV</dt><dd>{a.avgCmc.toFixed(2)}</dd></div>
       </dl>
       {a.deck.notes && <blockquote className="notes">{a.deck.notes}</blockquote>}
+      {a.deck.rating !== null && (
+        <p className="pool-rating" title={`${a.deck.playerName} rated the pool ${a.deck.rating} out of 10`}>
+          Pool rating <b>{a.deck.rating}</b>
+          <span className="muted">/10</span>
+        </p>
+      )}
       {a.total !== 40 && <p className="small muted">{a.total}-card deck</p>}
     </div>
   );
 }
 
-function HeadToHead({ analyses, meIdx }: { analyses: DeckAnalysis[]; meIdx: number }) {
-  const [ai, setAi] = useState(Math.max(0, meIdx));
-  const [bi, setBi] = useState(meIdx === 0 || meIdx < 0 ? 1 : 0);
-  const a = analyses[ai];
-  const b = analyses[bi];
-  const h = useMemo(() => headToHead(a, b), [a, b]);
-  const list = (cards: PoolCard[]) =>
-    cards.length ? (
-      <ul className="card-list">
-        {cards.map((c, i) => (
-          <li key={c.uid + i}>
-            <CardName card={c} />
-            <ManaCost cost={c.manaCost} />
-          </li>
-        ))}
-      </ul>
-    ) : (
-      <p className="muted small">None</p>
-    );
-  const pick = (v: number, set: (n: number) => void, label: string) => (
-    <select value={v} onChange={(e) => set(Number(e.target.value))} aria-label={label}>
-      {analyses.map((x, i) => (
-        <option key={x.deck.id} value={i}>{x.deck.playerName}</option>
-      ))}
-    </select>
-  );
-  return (
-    <div>
-      <div className="h2h-pickers">
-        {pick(ai, setAi, 'First player')} <span className="muted">vs</span> {pick(bi, setBi, 'Second player')}
-      </div>
-      {ai === bi ? (
-        <p className="muted">Pick two different players.</p>
-      ) : (
-        <div className="h2h">
-          <div>
-            <h4>Only {a.deck.playerName} <span className="muted">{h.onlyA.length}</span></h4>
-            {list(h.onlyA)}
-          </div>
-          <div>
-            <h4>Both <span className="muted">{h.both.length}</span></h4>
-            {list(h.both)}
-          </div>
-          <div>
-            <h4>Only {b.deck.playerName} <span className="muted">{h.onlyB.length}</span></h4>
-            {list(h.onlyB)}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function Results() {
   const { poolId = '' } = useParams();
@@ -175,16 +149,8 @@ export default function Results() {
   const n = cmp.analyses.length;
   // Put me first so my deck is easy to find.
   const ordered = [...cmp.analyses].sort((x, y) => Number(y.deck.id === me.deckId) - Number(x.deck.id === me.deckId));
-  const meIdx = cmp.analyses.findIndex((a) => a.deck.id === me.deckId);
   const curveMax = Math.max(...cmp.analyses.flatMap((a) => a.curve));
   const pending = pool.decks.filter((d) => !d.submittedAt);
-  const pairCounts = new Map<string, number>();
-  for (const a of cmp.analyses) {
-    const k = a.mainColors.join('');
-    pairCounts.set(k, (pairCounts.get(k) ?? 0) + 1);
-  }
-  const [topPair] = [...pairCounts.entries()].sort((x, y) => y[1] - x[1]);
-  const topPairName = topPair ? (topPair[0].length === 1 ? MONO[topPair[0] as keyof typeof MONO] : GUILDS[topPair[0]] ?? topPair[0]) : '—';
 
   return (
     <main className="page results">
@@ -207,12 +173,13 @@ export default function Results() {
         </div>
       </div>
 
-      <div className="tiles">
-        <div className="tile"><span className="tile-n">{n}</span><span className="tile-l">decks submitted</span></div>
-        <div className="tile">
-          <span className="tile-n">{topPairName}</span>
-          <span className="tile-l">{topPair && topPair[1] > 1 ? `most popular (${topPair[1]} decks)` : 'most popular colors'}</span>
-        </div>
+      <p className="submitted-count">
+        <b>{n}</b> {n === 1 ? 'deck' : 'decks'} submitted
+      </p>
+
+      <div className="color-charts">
+        <ColorBars title="Main colors" counts={cmp.colors.map((c) => ({ color: c.color, count: c.main }))} n={n} />
+        <ColorBars title="Splashed colors" counts={cmp.colors.map((c) => ({ color: c.color, count: c.splash }))} n={n} />
       </div>
 
       {n === 1 && <div className="callout">You’re the first to submit. As others finish, their decks and the comparisons will show up here.</div>}
@@ -231,13 +198,6 @@ export default function Results() {
           ))}
         </div>
       </section>
-
-      {n > 1 && (
-        <section className="panel">
-          <h2>Head to head</h2>
-          <HeadToHead analyses={cmp.analyses} meIdx={meIdx} />
-        </section>
-      )}
 
       <p className="muted small">
         A color counts as “main” when it has at least 5 of a deck’s spells (fewer for small decks); anything less is a splash.

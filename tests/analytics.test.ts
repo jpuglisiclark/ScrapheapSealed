@@ -17,7 +17,7 @@ const pool: Pool = {
   ],
 };
 const deck = (id: string, main: string[], basics = emptyBasics()): Deck => ({
-  id, poolId: 'p', playerName: id.toUpperCase(), main, basics, notes: '', layout: null, submittedAt: 'x', updatedAt: 'x',
+  id, poolId: 'p', playerName: id.toUpperCase(), main, basics, notes: '', layout: null, rating: null, submittedAt: 'x', updatedAt: 'x',
 });
 
 describe('cards helpers', () => {

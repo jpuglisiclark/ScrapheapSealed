@@ -66,7 +66,9 @@ describe('API', () => {
     await request(app).get(`/api/pools/${poolId}/results`).expect(403);
     await request(app).get(`/api/pools/${poolId}/results`).set('x-deck-token', ann.token).expect(403);
 
-    await request(app).put(`/api/decks/${ann.deckId}`).set('x-deck-token', ann.token).send({ submitted: true }).expect(200);
+    await request(app).put(`/api/decks/${ann.deckId}`).set('x-deck-token', ann.token).send({ submitted: true, rating: 11 }).expect(400);
+    const sub = await request(app).put(`/api/decks/${ann.deckId}`).set('x-deck-token', ann.token).send({ submitted: true, rating: 7 }).expect(200);
+    expect(sub.body.rating).toBe(7);
     // Submitted decks are locked against edits until reopened
     await request(app).put(`/api/decks/${ann.deckId}`).set('x-deck-token', ann.token).send({ main: [] }).expect(409);
 

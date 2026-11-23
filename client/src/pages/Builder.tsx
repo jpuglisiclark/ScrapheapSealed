@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.ts';
 import { getIdentity } from '../identity.ts';
 import { COLORS, COLOR_NAMES, type Color, type Layout, type PoolCard, type PoolWithDecks } from '../../../shared/types.ts';
-import { BASIC_NAMES, basicsCount, cardColors, curveBucket, exportDecklist, isCreature, isLand } from '../../../shared/cards.ts';
+import { BASIC_NAMES, basicsCount, cardColors, curveBucket, exportDecklist, isCreature, isLand, totalPips } from '../../../shared/cards.ts';
+import { useRating } from '../components/RatingDialog.tsx';
 import {
   basicCard,
   basicColor,
@@ -33,9 +34,12 @@ interface DeckMeta {
   playerName: string;
   notes: string;
   submittedAt: string | null;
+  rating: number | null;
 }
 /** Where dragged cards would land, plus where to draw the insertion line. */
-type DropHint = DropTarget & { lineTop?: number };
+type DropHint = DropTarget & { lineTop?: number; between?: boolean };
+/** How long the pointer must rest over the space between two piles before a new pile opens there. */
+const INSERT_DWELL_MS = 250;
 const sameHint = (a: DropHint | null, b: DropHint | null) => JSON.stringify(a) === JSON.stringify(b);
 
 const MIN_CARD_W = typeof window !== 'undefined' && window.innerWidth < 640 ? 96 : 128;
@@ -139,8 +143,35 @@ function useWidth(ref: React.RefObject<HTMLElement>) {
 }
 
 /** Where on screen dragged cards would land, worked out from the piles under the pointer. */
+/**
+ * A narrow space that opens between two piles while cards are dragged over the gap between them,
+ * nudging the piles to its right out of the way. Dropping there makes a new pile in between.
+ */
+function InsertGap({ zone, at }: { zone: Zone; at: number }) {
+  return <div className="insert-gap" data-drop="new" data-zone={zone} data-newcol={at} aria-hidden />;
+}
+
+/** How close (px) to the space between two piles counts as "between" them. */
+const BETWEEN_EDGE = 10;
+
 function hitTest(x: number, y: number, layout: Layout): DropHint | null {
-  const el = document.elementFromPoint(x, y)?.closest('[data-drop]') as HTMLElement | null;
+  const hit = document.elementFromPoint(x, y);
+  const el = hit?.closest('[data-drop]') as HTMLElement | null;
+  if (el?.dataset.drop === 'new') return { zone: el.dataset.zone as Zone, newCol: Number(el.dataset.newcol) };
+  // Between two piles that both have cards: open a new pile there.
+  const row = hit?.closest('[data-row]') as HTMLElement | null;
+  if (row) {
+    const piles = [...row.querySelectorAll<HTMLElement>(':scope > .pile')];
+    for (let i = 1; i < piles.length; i++) {
+      const prev = piles[i - 1];
+      const cur = piles[i];
+      if (prev.classList.contains('empty') || cur.classList.contains('empty')) continue;
+      const pr = prev.getBoundingClientRect();
+      const cr = cur.getBoundingClientRect();
+      if (x >= pr.right - BETWEEN_EDGE && x <= cr.left + BETWEEN_EDGE && y >= cr.top && y <= Math.max(cr.bottom, pr.bottom))
+        return { zone: row.dataset.row as Zone, newCol: Number(cur.dataset.col), between: true };
+    }
+  }
   if (!el) return null;
   const zone = el.dataset.zone as Zone;
   const col = Number(el.dataset.col);
@@ -270,6 +301,8 @@ export default function Builder() {
   const suppressClick = useRef(false);
   const loaded = useRef(false);
   const [dialog, confirmInApp] = useConfirm();
+  const [ratingDialog, askRating] = useRating();
+  const nav = useNavigate();
   const [showRares, setShowRares] = useState(false);
   layoutRef.current = layout;
 
@@ -278,7 +311,7 @@ export default function Builder() {
     Promise.all([api.pool(poolId), api.deck(me.deckId, me.token)])
       .then(([p, d]) => {
         setPool(p);
-        setMeta({ playerName: d.playerName, notes: d.notes, submittedAt: d.submittedAt });
+        setMeta({ playerName: d.playerName, notes: d.notes, submittedAt: d.submittedAt, rating: d.rating });
         setLayout(reconcileLayout(p, d.main, d.basics, d.layout));
         // First time this player opens their pool: a deck nobody has arranged or added to yet.
         if (!raresSeen(d.id) && !d.layout && d.main.length === 0 && !d.submittedAt) setShowRares(true);
@@ -346,6 +379,8 @@ export default function Builder() {
     if (isCreature(c)) creatureCurve[curveBucket(c.cmc) - 1]++;
   }
   const avgCmc = spells.length ? spells.reduce((s, c) => s + c.cmc, 0) / spells.length : 0;
+  const pipTotals = totalPips(mainCards);
+  const pipSum = COLORS.reduce((s, c) => s + pipTotals[c], 0);
 
   const q = search.trim().toLowerCase();
   const shownInSide = (u: string) => {
@@ -379,10 +414,22 @@ export default function Builder() {
     drag.current = { uids: group, startX: e.clientX, startY: e.clientY, offX: e.clientX - r.left, offY: e.clientY - r.top, x: e.clientX, y: e.clientY, active: false };
     let raf = 0;
 
+    let pendingInsert: { key: string; since: number } | null = null;
     const updateHint = () => {
       const d = drag.current;
       if (!d || !layoutRef.current) return;
-      const next = hitTest(d.x, d.y, layoutRef.current);
+      let next = hitTest(d.x, d.y, layoutRef.current);
+      if (next && 'newCol' in next && next.between) {
+        // Only open a new pile between two piles once the pointer has rested there, so that
+        // passing over gaps on the way somewhere doesn't shove piles around.
+        const key = `${next.zone}:${next.newCol}`;
+        const open = hintRef.current && 'newCol' in hintRef.current && `${hintRef.current.zone}:${hintRef.current.newCol}` === key;
+        if (!open) {
+          if (pendingInsert?.key !== key) pendingInsert = { key, since: performance.now() };
+          if (performance.now() - pendingInsert.since < INSERT_DWELL_MS) next = null;
+        }
+        if (next) next = { zone: next.zone, newCol: next.newCol };
+      } else pendingInsert = null;
       if (!sameHint(hintRef.current, next)) {
         hintRef.current = next;
         setHint(next);
@@ -392,6 +439,7 @@ export default function Builder() {
     const autoScroll = () => {
       const d = drag.current;
       if (!d?.active) return;
+      if (pendingInsert) updateHint();
       const edge = 70;
       const dy = d.y < edge ? -(edge - d.y) / 3 : d.y > window.innerHeight - edge ? (d.y - (window.innerHeight - edge)) / 3 : 0;
       if (dy) {
@@ -558,6 +606,8 @@ export default function Builder() {
   const draggingSet = new Set(dragging ?? []);
   const pileProps = { getCard, locked, draggingSet, selected, hint, onDragPointerDown, onPileDragPointerDown, onCardClick };
   const ghostCard = dragging ? getCard(dragging[0]) : null;
+  /** Slot a new pile is being opened at, if the dragged cards are over the space between two piles. */
+  const insertAt = (zone: Zone) => (hint && 'newCol' in hint && hint.zone === zone ? hint.newCol : null);
   // Show enough slots to fill the visible width, plus one spare so there's always room to the right.
   // As many slots as fit the visible width exactly, so there's no sideways scrolling unless
   // piles have been placed further right than fits (e.g. after making cards bigger).
@@ -578,15 +628,25 @@ export default function Builder() {
       });
       return;
     }
+    let rating: number | undefined;
+    if (submitted) {
+      const r = await askRating(meta.rating);
+      if (r === null) return; // cancelled: stay in the builder, not submitted
+      rating = r;
+    }
     setSave('saving');
     try {
       const d = await api.saveDeck(
         me.deckId,
         me.token,
-        submitted ? { main: mainFromLayout(layout), basics: basicsFromLayout(layout), layout, notes: meta.notes, submitted } : { submitted },
+        submitted ? { main: mainFromLayout(layout), basics: basicsFromLayout(layout), layout, notes: meta.notes, rating, submitted } : { submitted },
       );
+      if (submitted) {
+        nav(`/p/${poolId}/results`);
+        return;
+      }
       loaded.current = false;
-      setMeta({ playerName: d.playerName, notes: d.notes, submittedAt: d.submittedAt });
+      setMeta({ playerName: d.playerName, notes: d.notes, submittedAt: d.submittedAt, rating: d.rating });
       setLayout({ ...layout });
       setSelected(new Set());
       setSave('saved');
@@ -608,6 +668,7 @@ export default function Builder() {
   return (
     <main className={`builder ${dragging ? 'is-dragging' : ''}`} style={{ '--card-w': `${cardW}px` } as React.CSSProperties}>
       {dialog}
+      {ratingDialog}
       {showRares && (
         <RaresDialog
           cards={pool.cards}
@@ -692,9 +753,12 @@ export default function Builder() {
                 </div>
               )}
             </div>
-            <div className={`columns ${layout.deck.length > fit(deckAreaW) ? '' : 'no-x-scroll'}`} ref={deckAreaRef} onPointerDown={onAreaPointerDown}>
+            <div className={`columns ${layout.deck.length > fit(deckAreaW) ? '' : 'no-x-scroll'}`} data-row="deck" ref={deckAreaRef} onPointerDown={onAreaPointerDown}>
               {deckSlots.map((col, i) => (
-                <Pile key={i} zone="deck" col={i} visible={col} {...pileProps} />
+                <Fragment key={i}>
+                  {insertAt('deck') === i && <InsertGap zone="deck" at={i} />}
+                  <Pile zone="deck" col={i} visible={col} {...pileProps} />
+                </Fragment>
               ))}
               {deckUids.length === 0 && <p className="empty-hint">Click cards in your sideboard to add them, or drag them here.</p>}
             </div>
@@ -765,9 +829,12 @@ export default function Builder() {
                 {hiddenCount} hidden
               </p>
             )}
-            <div className={`columns ${layout.side.length > fit(sideAreaW) ? '' : 'no-x-scroll'}`} ref={sideAreaRef} onPointerDown={onAreaPointerDown}>
+            <div className={`columns ${layout.side.length > fit(sideAreaW) ? '' : 'no-x-scroll'}`} data-row="side" ref={sideAreaRef} onPointerDown={onAreaPointerDown}>
               {sideSlots.map((col, i) => (
-                <Pile key={i} zone="side" col={i} visible={col} {...pileProps} />
+                <Fragment key={i}>
+                  {insertAt('side') === i && <InsertGap zone="side" at={i} />}
+                  <Pile zone="side" col={i} visible={col} {...pileProps} />
+                </Fragment>
               ))}
             </div>
           </section>
@@ -792,6 +859,9 @@ export default function Builder() {
                 <li key={c}>
                   <span className="pip-label">
                     <ColorDots colors={[c]} /> {BASIC_NAMES[c]}
+                  </span>
+                  <span className="pip-share" title={`${COLOR_NAMES[c]} is ${pipSum ? Math.round((pipTotals[c] / pipSum) * 100) : 0}% of the colored mana symbols in your deck`}>
+                    {pipSum && pipTotals[c] ? `${Math.round((pipTotals[c] / pipSum) * 100)}%` : ''}
                   </span>
                   <span className="stepper">
                     <button type="button" disabled={locked || basics[c] === 0} onClick={() => removeBasic(c)} aria-label={`Remove a ${BASIC_NAMES[c]}`}>

@@ -46,6 +46,7 @@ export function openDb(file: string): DB {
   // Columns added after the first release.
   addColumn(db, 'pools', 'basic_lands', "TEXT NOT NULL DEFAULT '{}'");
   addColumn(db, 'decks', 'layout', 'TEXT');
+  addColumn(db, 'decks', 'rating', 'INTEGER');
   return db;
 }
 

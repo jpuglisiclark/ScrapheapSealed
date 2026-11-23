@@ -21,6 +21,7 @@ export interface DeckUpdate {
   basics?: Basics;
   notes?: string;
   layout?: Layout;
+  rating?: number;
   playerName?: string;
   submitted?: boolean;
 }
