@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api.ts';
 import { getIdentity } from '../identity.ts';
 import { COLORS, type Deck, type Pool, type PoolCard, type PoolWithDecks } from '../../../shared/types.ts';
@@ -9,6 +9,8 @@ import { CURVE_LABELS, curveBucket, isLand, GUILDS, MONO } from '../../../shared
 import { CardName, CardTile } from '../components/Card.tsx';
 import { ColorDots, ManaCost } from '../components/Mana.tsx';
 import { Curve, CurveLegend } from '../components/Curve.tsx';
+import { useConfirm } from '../components/ConfirmDialog.tsx';
+import { CopyButton } from './Lobby.tsx';
 
 /** A submitted deck laid out in piles by mana value, then lands and basics. */
 function DeckView({ a, pool }: { a: DeckAnalysis; pool: Pool }) {
@@ -121,6 +123,28 @@ export default function Results() {
   const me = getIdentity(poolId);
   const [data, setData] = useState<{ pool: PoolWithDecks; decks: Deck[] } | null>(null);
   const [error, setError] = useState<{ status: number; message: string } | null>(null);
+  const [dialog, confirmInApp] = useConfirm();
+  const [reopening, setReopening] = useState(false);
+  const nav = useNavigate();
+
+  /** Reopen my submitted deck for editing and go to the builder. */
+  async function editMyDeck() {
+    if (!me) return;
+    const ok = await confirmInApp({
+      title: 'Edit your deck?',
+      message: 'Your deck will be hidden from the comparison until you submit it again.',
+      confirmLabel: 'Edit deck',
+    });
+    if (!ok) return;
+    setReopening(true);
+    try {
+      await api.saveDeck(me.deckId, me.token, { submitted: false });
+      nav(`/p/${poolId}/build`);
+    } catch (e: any) {
+      setReopening(false);
+      setError({ status: 0, message: e.message });
+    }
+  }
 
   useEffect(() => {
     if (!me) return;
@@ -164,6 +188,7 @@ export default function Results() {
 
   return (
     <main className="page results">
+      {dialog}
       <div className="results-head">
         <div>
           <Link to="/?tab=past" className="back">← Past pools</Link>
@@ -173,6 +198,12 @@ export default function Results() {
               Still building: {pending.map((d) => d.playerName).join(', ')}. Refresh later to see their decks.
             </p>
           )}
+        </div>
+        <div className="results-actions">
+          <CopyButton text={`${location.origin}/p/${poolId}`} label="Share pool" />
+          <button type="button" className="btn primary" onClick={editMyDeck} disabled={reopening}>
+            {reopening ? 'Opening…' : 'Edit my deck'}
+          </button>
         </div>
       </div>
 
