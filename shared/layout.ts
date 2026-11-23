@@ -123,10 +123,26 @@ export function placeCard(layout: Layout, zone: Zone, card: PoolCard, mode: Sort
     if (at === -1 || color) at = col.length;
     col.splice(at, 0, card.uid);
   } else {
-    // No matching pile: use the first empty slot, or a new one at the end. Existing piles never shift.
-    const empty = cols.findIndex((col) => col.length === 0);
+    // No matching pile: start one in sorted position, after the last pile that sorts lower and
+    // before the next pile that sorts higher. Reuse an empty slot in that gap if there is one;
+    // otherwise insert a slot there (piles to the right shift over by one).
+    const keyOf = (i: number) => (cols[i].length ? sortKey(getCard(cols[i][0]), mode) : null);
+    let lo = -1;
+    cols.forEach((_, i) => {
+      const k = keyOf(i);
+      if (k !== null && k < key) lo = i;
+    });
+    let hi = cols.length;
+    for (let i = lo + 1; i < cols.length; i++) {
+      const k = keyOf(i);
+      if (k !== null && k > key) {
+        hi = i;
+        break;
+      }
+    }
+    const empty = cols.findIndex((col, i) => i > lo && i < hi && col.length === 0);
     if (empty !== -1) cols[empty].push(card.uid);
-    else cols.push([card.uid]);
+    else cols.splice(hi, 0, [card.uid]);
   }
   return { ...base, [zone]: clean(cols) };
 }

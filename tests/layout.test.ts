@@ -55,13 +55,15 @@ describe('layout', () => {
     l = placeCard(l, 'deck', get('c'), 'cmc', get);
     expect(l.deck).toEqual([['c', 'a'], ['basic-G-1']]);
     l = placeCard(l, 'deck', get('b'), 'cmc', get);
-    expect(l.deck).toEqual([['c', 'a'], ['basic-G-1'], ['b']]);
+    // b (3 mana) has no pile: a new one goes between the 2-drops and the lands
+    expect(l.deck).toEqual([['c', 'a'], ['b'], ['basic-G-1']]);
     l = placeCard(l, 'deck', basicCard(pool, nextBasicId(l, 'G')), 'cmc', get);
-    expect(l.deck[1]).toEqual(['basic-G-1', 'basic-G-2']);
+    expect(l.deck[2]).toEqual(['basic-G-1', 'basic-G-2']);
     expect(basicsFromLayout(l).G).toBe(2);
     expect(mainFromLayout(l)).toEqual(['c', 'a', 'b']);
-    expect(removeCard(l, 'b').deck).toHaveLength(2); // trailing empty pile dropped
-    expect(removeCard(l, 'basic-G-1').deck[1]).toEqual(['basic-G-2']);
+    expect(removeCard(l, 'b').deck).toEqual([['c', 'a'], [], ['basic-G-1', 'basic-G-2']]); // its slot stays
+    expect(removeCard(removeCard(l, 'basic-G-1'), 'basic-G-2').deck).toEqual([['c', 'a'], ['b']]); // trailing empty slot dropped
+    expect(removeCard(l, 'basic-G-1').deck[2]).toEqual(['basic-G-2']);
   });
 
   it('moves a group of cards together, from several piles and zones', () => {
@@ -82,5 +84,20 @@ describe('layout', () => {
     const r = (uid: string, rarity: any, cmc: number) => ({ ...pc(uid, { name: uid, rarity, cmc }) });
     const cards = [r('c1', 'common', 2), r('m1', 'mythic', 5), r('u1', 'uncommon', 1), r('r1', 'rare', 3), r('c2', 'common', 1)];
     expect(sortedColumns(cards, 'rarity')).toEqual([['m1'], ['r1'], ['u1'], ['c2', 'c1']]);
+  });
+
+  it('clicked cards land in mana value order, using an empty slot in the right spot', () => {
+    const mk = (uid: string, cmc: number) => pc(uid, { name: uid, cmc });
+    const cards = Object.fromEntries(['one', 'two', 'four', 'five', 'six', 'three', 'twoB'].map((u, i) => [u, mk(u, [1, 2, 4, 5, 6, 3, 2][i])]));
+    const g = (u: string) => cards[u];
+    let l: Layout = { deck: [['one'], [], ['four'], ['six']], side: [] };
+    l = placeCard(l, 'deck', g('three'), 'cmc', g); // empty slot between 1 and 4 is used
+    expect(l.deck).toEqual([['one'], ['three'], ['four'], ['six']]);
+    l = placeCard(l, 'deck', g('five'), 'cmc', g); // no gap between 4 and 6: piles to the right shift
+    expect(l.deck).toEqual([['one'], ['three'], ['four'], ['five'], ['six']]);
+    l = placeCard(l, 'deck', g('two'), 'cmc', g);
+    expect(l.deck).toEqual([['one'], ['two'], ['three'], ['four'], ['five'], ['six']]);
+    l = placeCard(l, 'deck', g('twoB'), 'cmc', g); // joins its pile, ordered by mana value then name
+    expect(l.deck[1]).toEqual(['two', 'twoB']);
   });
 });
