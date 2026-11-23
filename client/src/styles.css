@@ -80,8 +80,8 @@ label { display: flex; flex-direction: column; gap: 0.3rem; font-weight: 600; fo
 }
 .btn:hover:not(:disabled) { border-color: var(--accent); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+.btn.primary { background: #ffffff; color: #000000; border-color: #ffffff; }
+.btn.primary:hover:not(:disabled) { background: #e4e4e8; border-color: #e4e4e8; }
 .btn.big { padding: 0.8rem 1.2rem; font-size: 1rem; }
 .btn.small { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
 button.link { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; font-size: 0.85rem; padding: 0 0.25rem; }
@@ -93,10 +93,10 @@ button.link { background: none; border: 0; color: var(--accent); cursor: pointer
 .site-nav a.on { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .brand { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 800; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
-/* The logo image is white-on-transparent; use it as a stencil so it takes the brand color in light and dark themes */
+/* The logo image is white-on-transparent, used as a stencil so its color can be set here */
 .brand-logo {
   width: 30px; height: 29px; flex: none;
-  background: var(--accent);
+  background: #ffffff; /* white, as uploaded */
   -webkit-mask: url('/logo.png') center / contain no-repeat;
   mask: url('/logo.png') center / contain no-repeat;
 }
@@ -481,7 +481,7 @@ textarea { resize: vertical; }
 .rating-scale { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; margin-bottom: 0.35rem; }
 .rating-btn { font: inherit; font-weight: 700; padding: 0.55rem 0; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); cursor: pointer; }
 .rating-btn:hover { border-color: var(--accent); }
-.rating-btn.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.rating-btn.on { background: #ffffff; border-color: #ffffff; color: #000000; }
 .rating-ends { display: flex; justify-content: space-between; margin-bottom: 1rem; }
 
 /* A stack of identical basic lands shown as one card */
