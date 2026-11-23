@@ -216,10 +216,6 @@ export default function Results() {
         </div>
       </section>
 
-      <p className="muted small">
-        A color counts as “main” when it has at least 5 of a deck’s spells (fewer for small decks); anything less is a splash.
-        Hybrid cards that a deck can cast with one of its main colors don’t count as a splash.
-      </p>
     </main>
   );
 }

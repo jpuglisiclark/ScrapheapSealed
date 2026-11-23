@@ -498,11 +498,14 @@ textarea { resize: vertical; }
 
 /* Comparison page: one row per deck, stats on the left, cards on the right */
 .deck-rows { display: flex; flex-direction: column; gap: 1rem; }
-.deck-row { --card-w: 104px; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.results { max-width: 1400px; }
+.deck-row { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 1.25rem; align-items: start; }
 .deck-info { display: flex; flex-direction: column; gap: 0.6rem; }
 .deck-info header h3 { margin: 0 0 0.15rem; font-size: 1.1rem; }
 .deck-info p { margin: 0; }
-.deck-row .deck-view .columns { gap: 12px; align-items: flex-start; }
+.deck-row .deck-view { container-type: inline-size; }
+/* Cards grow to fill the row: room for 7 piles (6 mana values + lands), between 96px and 150px wide */
+.deck-row .deck-view .columns { --card-w: clamp(96px, calc((100cqw - 6 * 12px - 8px) / 7), 150px); gap: 12px; align-items: flex-start; }
 @media (max-width: 800px) { .deck-row { grid-template-columns: 1fr; } }
 
 .pip-share { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 2.6em; text-align: right; }
