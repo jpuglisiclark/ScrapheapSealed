@@ -1,0 +1,418 @@
+# Star Trek (TRK) Play Booster, 14 cards, PRIMARY ART ONLY - from https://magic.wizards.com/en/news/feature/collecting-star-trek
+# Every alternate-art outcome (scene, LCARS, classic Enterprise, Klingon-frame, borderless, shock lands, holodeck / away team basics)
+# whose rate the article prints is added to the primary-art card of the same rarity. Only percentages printed in the article are used.
+# Slots: 1 traditional foil, 1 rare/mythic, 1 wildcard, 3 uncommons, 7 commons, 1 land. In 1 of 25 packs a Stardates card replaces a common.
+# Foil slot weights, % as printed + folded (C U R M): C 51.2, U 38.4, R 6.3, M 1.0
+# Rare/Mythic slot weights (R M): R 86.8, M 12.4
+# Wildcard slot weights (C U R M): C 20.8, U 57.6, R 16.7, M 2.6
+# Outcomes the article only calls 'less than 1%' have no printed number and are omitted; weights are relative, so Draftmancer rescales each slot to 100%.
+# Land slot foil finish is not modelled. Duplicate protection (by card) applies inside a pack. Color balance is off.
+
+[Settings]
+{
+  "name": "Star Trek (TRK) Play Booster - primary art only",
+  "withReplacement": true,
+  "layoutWithReplacement": true,
+  "duplicateProtection": true,
+  "colorBalance": false,
+  "layouts": {
+    "Play Booster": {
+     "weight": 24,
+     "slots": [
+      {"name": "Traditional Foil", "count": 1, "foil": true, "sheets": [{"name": "Main Common", "weight": 512}, {"name": "Main Uncommon", "weight": 384}, {"name": "Main Rare", "weight": 63}, {"name": "Main Mythic", "weight": 10}]},
+      {"name": "Rare or Mythic", "count": 1, "sheets": [{"name": "Main Rare", "weight": 868}, {"name": "Main Mythic", "weight": 124}]},
+      {"name": "Wildcard", "count": 1, "sheets": [{"name": "Main Common", "weight": 208}, {"name": "Main Uncommon", "weight": 576}, {"name": "Main Rare", "weight": 167}, {"name": "Main Mythic", "weight": 26}]},
+      {"name": "Uncommon 1", "count": 1, "sheets": ["Main Uncommon"]},
+      {"name": "Uncommon 2", "count": 1, "sheets": ["Main Uncommon"]},
+      {"name": "Uncommon 3", "count": 1, "sheets": ["Main Uncommon"]},
+      {"name": "Common 1", "count": 1, "sheets": ["Main Common"]},
+      {"name": "Common 2", "count": 1, "sheets": ["Main Common"]},
+      {"name": "Common 3", "count": 1, "sheets": ["Main Common"]},
+      {"name": "Common 4", "count": 1, "sheets": ["Main Common"]},
+      {"name": "Common 5", "count": 1, "sheets": ["Main Common"]},
+      {"name": "Common 6", "count": 1, "sheets": ["Main Common"]},
+      {"name": "Common 7", "count": 1, "sheets": ["Main Common"]},
+      {"name": "Land", "count": 1, "sheets": [{"name": "Dual Land", "weight": 500}, {"name": "Basic Land", "weight": 502}]}
+     ]
+    },
+    "Play Booster with Stardates": {
+     "weight": 1,
+     "slots": [
+      {"name": "Traditional Foil", "count": 1, "foil": true, "sheets": [{"name": "Main Common", "weight": 512}, {"name": "Main Uncommon", "weight": 384}, {"name": "Main Rare", "weight": 63}, {"name": "Main Mythic", "weight": 10}]},
+      {"name": "Rare or Mythic", "count": 1, "sheets": [{"name": "Main Rare", "weight": 868}, {"name": "Main Mythic", "weight": 124}]},
+      {"name": "Wildcard", "count": 1, "sheets": [{"name": "Main Common", "weight": 208}, {"name": "Main Uncommon", "weight": 576}, {"name": "Main Rare", "weight": 167}, {"name": "Main Mythic", "weight": 26}]},
+      {"name": "Uncommon 1", "count": 1, "sheets": ["Main Uncommon"]},
+      {"name": "Uncommon 2", "count": 1, "sheets": ["Main Uncommon"]},
+      {"name": "Uncommon 3", "count": 1, "sheets": ["Main Uncommon"]},
+      {"name": "Common 1", "count": 1, "sheets": ["Main Common"]},
+      {"name": "Common 2", "count": 1, "sheets": ["Main Common"]},
+      {"name": "Common 3", "count": 1, "sheets": ["Main Common"]},
+      {"name": "Common 4", "count": 1, "sheets": ["Main Common"]},
+      {"name": "Common 5", "count": 1, "sheets": ["Main Common"]},
+      {"name": "Common 6", "count": 1, "sheets": ["Main Common"]},
+      {"name": "Stardates", "count": 1, "sheets": ["Stardates"]},
+      {"name": "Land", "count": 1, "sheets": [{"name": "Dual Land", "weight": 500}, {"name": "Basic Land", "weight": 502}]}
+     ]
+    }
+  }
+}
+
+[Main Common]
+Andromedan Automatons (trk) 2
+Command Decision (trk) 8
+DOT-7 Repair Squad (trk) 12
+Emergency Medical Hologram (trk) 15
+Federation Field Medic (trk) 17
+Free Borg Revolutionaries (trk) 19
+Malfunctioning Holodeck (trk) 22
+Oberth-Class Starship (trk) 26
+Pet Sehlat (trk) 28
+Pure Energy (trk) 31
+Set Phasers to . . . (trk) 34
+Shields Up! (trk) 35
+Shuttle Ace (trk) 36
+Tactical Officer (trk) 38
+Vexing Drone (trk) 45
+Cetacean Ops (trk) 48
+Cloistered Telepath (trk) 50
+Consider the Prime Directive (trk) 51
+Emergency Holographic Crew (trk) 55
+Federation Probe (trk) 59
+Guidance Failure (trk) 60
+Humpback Whales (trk) 65
+Interstellar Effigy (trk) 66
+Make It So (trk) 71
+Marooned (trk) 72
+Melkotian Adjudicator (trk) 73
+Open Communications (trk) 76
+Starfleet Spanner Jockey (trk) 81
+Suurok-Class Science Vessel (trk) 83
+Suus Mahna Practitioner (trk) 84
+Assault Drone (trk) 92
+Automated Warfare System (trk) 93
+Battle-Scarred Survivalist (trk) 95
+Cha'DIch Investigator (trk) 97
+Eject the Warp Core (trk) 105
+Fugitive Listener (trk) 107
+A Good Day to Die (trk) 111
+He's Dead, Jim (trk) 114
+Obsidian Order Operative (trk) 120
+Pattern Buffer Preservation (trk) 123
+Relentless Drednok (trk) 124
+Rogue Artificial Intelligence (trk) 126
+Stray from History (trk) 130
+Tal Shiar Operative (trk) 131
+Tenacious Drone (trk) 133
+Boarding Action (trk) 139
+Cantankerous Captain (trk) 141
+Captain's Tutelage (trk) 144
+Dahar Master (trk) 146
+Genesis Effect (trk) 151
+Horta (trk) 152
+Perils of the Past (trk) 161
+Planetary Bombardment (trk) 162
+Planetary Patrol (trk) 163
+Plasma Cascade (trk) 164
+Reckless Impulse (trk) 168
+Savvy Profiteer (trk) 171
+Silicate Surveyor (trk) 172
+Starfleet Security (trk) 173
+Tal Shiar Analyst (trk) 174
+Astute Terraformer (trk) 184
+Cold-Blooded Crew (trk) 189
+Common Goal (trk) 190
+Dathon and Picard at El-Adrel (trk) 192
+Dominion Assault Force (trk) 194
+Dominion Supervisor (trk) 195
+Final Frontier (trk) 198
+First Contact (trk) 199
+I'm a Doctor, Not a . . . (trk) 203
+Moopsy (trk) 207
+Photosynthetic Physician (trk) 210
+Saurian Explorer (trk) 213
+Temporal Conqueror (trk) 219
+Xenobotanist (trk) 224
+Xindi Surveyors (trk) 225
+Class-F Shuttlecraft (trk) 259
+Cybernetic Specialist (trk) 262
+Tea, Earl Grey, Hot (trk) 269
+Tricorder (trk) 270
+Warp Core (trk) 274
+Unexplored Territory (trk) 303
+
+[Main Uncommon]
+70,000 Light-Years from Home (trk) 1
+Assembly Specialist (trk) 4
+Brad Boimler, Eager Ensign (trk) 5
+Command Subadjunct (trk) 9
+Conquest Mission (trk) 10
+Dr. McCoy, Surly Surgeon (trk) 14
+Ghost of Illyria (trk) 20
+Hologram Janeway (trk) 21
+The Measure of a Man (trk) 23
+Picard, Leading by Example (trk) 29
+Rutherford, Upgraded Ensign (trk) 32
+Saavik, Stoic Student (trk) 33
+Test of Conviction (trk) 39
+There's Coffee in that Nebula (trk) 40
+Una Chin-Riley, Number One (trk) 42
+U.S.S. Excelsior, Cutting Edge (trk) 44
+Anthropological Mission (trk) 46
+Cloak and Phaser (trk) 49
+Data, New Life (trk) 52
+Dominion Saboteur (trk) 54
+Energize (trk) 56
+Ensign Pavel Chekov (trk) 57
+Enterprise NX-01 (trk) 58
+Highly Illogical (trk) 62
+Hoshi Sato, Exolinguist (trk) 64
+Jett Reno, Problem Solver (trk) 67
+Rules of Acquisition (trk) 78
+Test of Priorities (trk) 85
+Those Old Scientists (trk) 86
+V'Ger, the Intruder (trk) 87
+Vulcan Mind-Meld (trk) 88
+Zefram Cochrane, Warp Pioneer (trk) 90
+Bat'leth (trk) 94
+Blastoneuron (trk) 96
+Collective Drone (trk) 99
+Commander Raffi Musiker (trk) 100
+D'Ghor Bloodletter (trk) 101
+De-evolve (trk) 104
+Gabriel Lorca, Mirror Menace (trk) 108
+Hive Mind Coprocessor (trk) 115
+Impossible Choice (trk) 116
+In the Pale Moonlight (trk) 117
+Organic Avulsion Unit (trk) 121
+Resistance Is Futile (trk) 125
+Storied Veteran (trk) 129
+Tell Me What You See (trk) 132
+Test of Loyalty (trk) 134
+Vengeance Mission (trk) 136
+Academy Instructor (trk) 137
+Beckett Mariner, Impetuous Ensign (trk) 138
+Captain Michael Burnham (trk) 143
+Erica Ortegas, Plucky Pilot (trk) 149
+Exploratory Mission (trk) 150
+Khaaaaaaaaaaaannn! (trk) 154
+Khan, Despot by Design (trk) 155
+La'An Noonien-Singh, Security (trk) 156
+Munitions Enthusiast (trk) 158
+The Naked Time (trk) 159
+Ravenous Cosmozoan (trk) 167
+Red Alert! (trk) 169
+Sarcophagus, Ship of the Dead (trk) 170
+Targ Wrangler (trk) 175
+Test of Identity (trk) 177
+Transporter Malfunction (trk) 178
+Adversary by Algorithm (trk) 182
+Amok Time (trk) 183
+Culber and Stamets, Star-Crossed (trk) 191
+David and Carol Marcus, Creators (trk) 193
+Hologram Stalker (trk) 202
+Jake Sisko, War Correspondent (trk) 205
+Mugato (trk) 208
+Neelix, Moral Support (trk) 209
+Saru, Unthreatened (trk) 212
+Species 8472 (trk) 214
+Support Mission (trk) 216
+Sylvia Tilly, Joy of Discovery (trk) 217
+Syndicate Liquidators (trk) 218
+Test of Courage (trk) 220
+U.S.S. Voyager, Lone Wanderer (trk) 222
+Warp Speed (trk) 223
+Cleveland Booker, Empath (trk) 229
+Constable Odo (trk) 230
+Dal R'El, Augment Orphan (trk) 231
+Daniels, Temporal Agent (trk) 232
+The Doctor, EMH (trk) 234
+The Duras Sisters (trk) 235
+D'Vana Tendi, Optimistic Ensign (trk) 236
+Gray and Adira, Forever Joined (trk) 238
+Hemmer, Fixing What Is Broken (trk) 239
+Kirk, Commanding Officer (trk) 243
+Locutus, the One Who Speaks (trk) 245
+Lore, Positronic Provocateur (trk) 246
+L'Rell, Fierce Visionary (trk) 247
+Phlox, Unorthodox Doctor (trk) 250
+Seven of Nine (trk) 252
+Spock, Always Your Friend (trk) 253
+The Traveler (trk) 254
+Vash, Freelance Archaeologist (trk) 255
+Worf, Honor-Bound Warrior (trk) 256
+Zero, Incorporeal Sensate (trk) 258
+Combadge (trk) 260
+Isolinear Processor (trk) 266
+Sickbay (trk) 268
+Type-2 Phaser (trk) 271
+U.S.S. Cerritos, Following Up (trk) 272
+Artificial Anomaly (trk) 276
+Gaseous Anomaly (trk) 284
+Spatial Anomaly (trk) 296
+Subspace Anomaly (trk) 300
+Temporal Anomaly (trk) 302
+
+[Main Rare]
+Antagonist Incorporator (trk) 3
+Captain Benjamin Sisko (trk) 6
+Deanna Troi, Psychic Counsel (trk) 11
+Federation Resupply (trk) 18
+Miles O'Brien, Transporter Ops (trk) 24
+The Needs of the Many (trk) 25
+Peace in Our Time (trk) 27
+Primary Unimatrix Adjunct (trk) 30
+Sulu, Space Swashbuckler (trk) 37
+Troubling Tribbles (trk) 41
+The Caretaker (trk) 47
+Deep Space Scan (trk) 53
+Gwyndala, the Progeny (trk) 61
+H.M.S. Bounty, Unlikely Timeship (trk) 63
+Lt. Cmdr. Geordi La Forge (trk) 70
+Nyota Uhura, Communications (trk) 75
+Romulan Bird-of-Prey (trk) 77
+Subcommander T'Pol (trk) 82
+Wesley Crusher, Starfleet Cadet (trk) 89
+Armus, Skin of Evil (trk) 91
+Collation Trimatrix (trk) 98
+The Destruction of Praxis (trk) 103
+Elim Garak, Simple Tailor (trk) 106
+General Chang, Cold Warrior (trk) 109
+Grand Nagus Zek (trk) 112
+Kai Winn, Faithless Leader (trk) 118
+Overflow Submatrix (trk) 122
+Salt Vampire (trk) 127
+Sela, Tal Shiar Paradox (trk) 128
+U.S.S. Reliant, From Hell's Heart (trk) 135
+Brazen Bluff (trk) 140
+D-7 Battle Cruiser (trk) 145
+Dominion Infiltration (trk) 147
+Encounter the Unknown (trk) 148
+Lwaxana Troi, Charming Guest (trk) 157
+Pah-Wraith (trk) 160
+Tasha Yar, Out of Time (trk) 176
+Will Riker, First in the Field (trk) 179
+Worf, Intelligence Contractor (trk) 180
+The Wrath of Khan (trk) 181
+Branching Timeline (trk) 185
+Captain Jonathan Archer (trk) 186
+Captain Pike, Fullness of Time (trk) 188
+Dr. Leonard "Bones" McCoy (trk) 197
+Genesis Device (trk) 200
+Holo-Engineer (trk) 201
+MACO Strike Team (trk) 206
+Stable Wormhole (trk) 215
+U.S.S. Discovery, at Black Alert (trk) 221
+All Good Things... (trk) 226
+The City on the Edge of Forever (trk) 228
+Dathon, His Heart Open (trk) 233
+Gowron, Eager for Battle (trk) 237
+Hit It! (trk) 240
+The Inner Light (trk) 241
+Kira Nerys, Firebrand (trk) 242
+Live Long and Prosper (trk) 244
+Mirror Universe Intrusion (trk) 248
+Nog, Ambitious Cadet (trk) 249
+Sarek, Federation Ambassador (trk) 251
+Year of Hell (trk) 257
+Engineered Explosives (trk) 264
+The Holodeck (trk) 265
+Replicator (trk) 267
+U.S.S. Enterprise-D, Galaxy-Class (trk) 273
+Blood Crypt (trk) 278
+Breeding Pool (trk) 279
+Federation Outpost (trk) 282
+Godless Shrine (trk) 285
+Hallowed Fountain (trk) 286
+Ni'Var Science Academy (trk) 287
+Overgrown Tomb (trk) 289
+Q Continuum (trk) 290
+Quark's Bar (trk) 292
+Sacred Foundry (trk) 295
+Steam Vents (trk) 298
+Stomping Ground (trk) 299
+Temple Garden (trk) 301
+The Unicomplex (trk) 304
+Watery Grave (trk) 306
+
+[Main Mythic]
+Captain Jean-Luc Picard (trk) 7
+Dr. Beverly Crusher (trk) 13
+Excalbian Gamemaster (trk) 16
+U.S.S. Enterprise-A, Free Spirit (trk) 43
+Kobayashi Maru Scenario (trk) 68
+Lieutenant Commander Data (trk) 69
+Mr. Spock, Science Officer (trk) 74
+Scotty, Miracle Worker (trk) 79
+Seven of Nine, Unassimilated (trk) 80
+Death Is Irrelevant (trk) 102
+Georgiou, Terran Emperor (trk) 110
+Gul Dukat, Colonial Prefect (trk) 113
+Khan, Vengeful Heart (trk) 119
+Captain James T. Kirk (trk) 142
+Infinite Diversity (trk) 153
+Q, Stacking the Deck (trk) 165
+Quark, Humble Proprietor (trk) 166
+Captain Kathryn Janeway (trk) 187
+Dr. Joseph M'Benga (trk) 196
+Jadzia Dax, Living Legacy (trk) 204
+Rok-Tahk, Budding Scientist (trk) 211
+Borg Cube (trk) 227
+Crystalline Entity (trk) 261
+Deep Space 9 (trk) 263
+Starfleet Academy (trk) 297
+
+[Dual Land]
+Andoria (trk) 275
+Bajor (trk) 277
+Cardassia Prime (trk) 280
+Earth, Sector 001 (trk) 281
+Ferenginar (trk) 283
+Orion (trk) 288
+Qo'noS (trk) 291
+Risa (trk) 293
+Romulus (trk) 294
+Vulcan (trk) 305
+
+[Basic Land]
+Plains (trk) 317
+Plains (trk) 318
+Island (trk) 319
+Island (trk) 320
+Swamp (trk) 321
+Swamp (trk) 322
+Mountain (trk) 323
+Mountain (trk) 324
+Forest (trk) 325
+Forest (trk) 326
+
+[Stardates]
+Mikaeus, the Lunarch (sds) 1
+Flare of Fortitude (sds) 2
+Kenrith, the Returned King (sds) 3
+Sisay, Weatherlight Captain (sds) 4
+Thada Adel, Acquisitor (sds) 5
+Empress Galina (sds) 6
+Arcum Dagsson (sds) 7
+Bruvac the Grandiloquent (sds) 8
+Decree of Pain (sds) 9
+Drivnod, Carnage Dominus (sds) 10
+Sheoldred, the Apocalypse (sds) 11
+Torbran, Thane of Red Fell (sds) 12
+Loot, Exuberant Explorer (sds) 13
+Rishkar, Peema Renegade (sds) 14
+Bristly Bill, Spine Sower (sds) 15
+Sen Triplets (sds) 16
+Tatyova, Benthic Druid (sds) 17
+Hull Breach (sds) 18
+Isshin, Two Heavens as One (sds) 19
+Ertai Resurrected (sds) 20
+Jhoira, Weatherlight Captain (sds) 21
+Captain Sisay (sds) 22
+Riku of Many Paths (sds) 23
+Prosper, Tome-Bound (sds) 24
+Stella Lee, Wild Card (sds) 25
+Mogis, God of Slaughter (sds) 26
+Minamo, School at Water's Edge (sds) 27
+Talon Gates of Madara (sds) 28
+Phyrexian Tower (sds) 29
+Shizo, Death's Storehouse (sds) 30

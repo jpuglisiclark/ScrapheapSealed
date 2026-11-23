@@ -41,6 +41,6 @@ npm run typecheck
 
 **No peeking:** `/api/pools/:id/results` only answers callers whose own deck in that pool is submitted. A submitted deck is locked; reopening it removes it from the comparison until it's resubmitted.
 
-**Collation** is an approximation. Play boosters: 1 rare/mythic (~1 in 7 mythic), 3 uncommons, 7 commons, 1 any-rarity wildcard, 1 foil wildcard, and a common nonbasic land when the set has them. Special-guest and bonus-sheet cards aren't included.
+**Collation.** If `server/collations/<set>.txt` exists for the configured set, packs follow it exactly. It uses Draftmancer's custom card list format: weighted pack layouts, slots that pick a sheet by weight, and sheets of specific printings (`Name (set) collector_number`). Those printings are fetched from Scryfall and cached. TRK ships with `server/collations/trk.txt` (play boosters, primary art only, including the 1-in-25 Stardates pack). To change the odds or the card lists, edit that file and restart the server. Without a collation file the server falls back to an approximate play booster: 1 rare/mythic, 3 uncommons, 7 commons, a wildcard, a foil and a common land.
 
 Card data and images © Wizards of the Coast, served via Scryfall. Not affiliated with Wizards of the Coast.

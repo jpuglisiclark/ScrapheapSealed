@@ -10,6 +10,7 @@ function setup() {
     db: openDb(':memory:'),
     setCode: 'tst',
     cards: {
+      fetchCards: async () => ({}),
       fetchBasics: async () => ({ W: card({ name: 'Plains', typeLine: 'Basic Land — Plains', manaCost: '', cmc: 0 }) }),
       fetchSets: async () => [{ code: 'tst', name: 'Test Set', releasedAt: '2024-01-01', setType: 'expansion', iconSvg: '' }],
       fetchSetCards: async () => {

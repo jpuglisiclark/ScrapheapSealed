@@ -100,8 +100,18 @@ export function exportDecklist(main: PoolCard[], basics: Basics, sideboard: Pool
     for (const c of cards) m.set(c.name, (m.get(c.name) ?? 0) + 1);
     return [...m.entries()].map(([n, k]) => `${k} ${n}`);
   };
-  const lines = ['Deck', ...count(main)];
-  for (const col of COLORS) if (basics[col]) lines.push(`${basics[col]} ${BASIC_NAMES[col]}`);
+  // Basics opened in packs and basics added with the +/- buttons share one line per name.
+  const withBasics = [...main];
+  const extra = new Map<string, number>();
+  for (const col of COLORS) if (basics[col]) extra.set(BASIC_NAMES[col], basics[col]);
+  const mainLines = count(withBasics).map((l) => {
+    const [, k, n] = l.match(/^(\d+) (.+)$/)!;
+    const add = extra.get(n) ?? 0;
+    extra.delete(n);
+    return `${Number(k) + add} ${n}`;
+  });
+  const lines = ['Deck', ...mainLines];
+  for (const [n, k] of extra) lines.push(`${k} ${n}`);
   if (sideboard.length) lines.push('', 'Sideboard', ...count(sideboard));
   return lines.join('\n');
 }

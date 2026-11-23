@@ -7,18 +7,23 @@ const ALLOWED_SET_TYPES = new Set(['expansion', 'core', 'draft_innovation', 'mas
 
 let lastRequest = 0;
 /** Scryfall asks for 50–100ms between requests. */
-async function get(url: string): Promise<any> {
+async function get(url: string, body?: unknown): Promise<any> {
   const wait = lastRequest + 100 - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastRequest = Date.now();
-  const res = await fetch(url, { headers: HEADERS });
-  const body = await res.json().catch(() => ({}));
+  const res = await fetch(
+    url,
+    body === undefined
+      ? { headers: HEADERS }
+      : { method: 'POST', headers: { ...HEADERS, 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+  );
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(body?.details ?? `Scryfall request failed (${res.status})`) as Error & { status?: number };
+    const err = new Error(data?.details ?? `Scryfall request failed (${res.status})`) as Error & { status?: number };
     err.status = res.status;
     throw err;
   }
-  return body;
+  return data;
 }
 
 export async function fetchSets(): Promise<SetInfo[]> {
@@ -97,6 +102,23 @@ export async function fetchBasics(code: string): Promise<BasicLands> {
   for (const [color, name] of Object.entries(BASIC_NAMES) as [Color, string][]) {
     const c = cards.find((x) => x.name === name);
     if (c) out[color] = c;
+  }
+  return out;
+}
+
+/**
+ * Exact printings by set + collector number, keyed "set:number".
+ * Uses Scryfall's collection endpoint (75 cards per request).
+ */
+export async function fetchCards(refs: { set: string; collectorNumber: string }[]): Promise<Record<string, CardTemplate>> {
+  const out: Record<string, CardTemplate> = {};
+  for (let i = 0; i < refs.length; i += 75) {
+    const batch = refs.slice(i, i + 75);
+    const body = await get(`${API}/cards/collection`, {
+      identifiers: batch.map((r) => ({ set: r.set, collector_number: r.collectorNumber })),
+    });
+    for (const c of body.data as any[]) out[`${String(c.set).toLowerCase()}:${c.collector_number}`] = normalizeCard(c);
+    if (body.not_found?.length) console.warn('Scryfall could not find', body.not_found);
   }
   return out;
 }

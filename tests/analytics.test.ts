@@ -34,6 +34,10 @@ describe('cards helpers', () => {
     const txt = exportDecklist([pool.cards[0], pool.cards[1]], { ...emptyBasics(), G: 17 }, [pool.cards[2]]);
     expect(txt).toBe('Deck\n2 Bear\n17 Forest\n\nSideboard\n1 Bolt');
   });
+  it('merges opened basics with added basics in the decklist', () => {
+    const swamp = pc('9', { name: 'Swamp', typeLine: 'Basic Land — Swamp', manaCost: '', cmc: 0 });
+    expect(exportDecklist([pool.cards[0], swamp], { ...emptyBasics(), B: 16 }, [])).toBe('Deck\n1 Bear\n17 Swamp');
+  });
   it('names archetypes', () => {
     expect(archetypeName(['R', 'G'], [])).toBe('Gruul');
     expect(archetypeName(['W', 'B'], ['R'])).toBe('Orzhov splash R');

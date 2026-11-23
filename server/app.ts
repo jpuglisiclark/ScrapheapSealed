@@ -4,6 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import type { DB } from './db.ts';
 import { generatePool } from '../shared/booster.ts';
+import { collationRefs, generateCollationPool, type Collation } from '../shared/collation.ts';
 import { COLORS, emptyBasics, type Basics, type BasicLands, type CardTemplate, type Deck, type DeckSummary, type Pool, type PoolListItem, type SetInfo } from '../shared/types.ts';
 import { sanitizeLayout } from '../shared/layout.ts';
 
@@ -11,6 +12,8 @@ export interface CardSource {
   fetchSets(): Promise<SetInfo[]>;
   fetchSetCards(code: string): Promise<CardTemplate[]>;
   fetchBasics(code: string): Promise<BasicLands>;
+  /** Exact printings, keyed "set:collector_number". */
+  fetchCards(refs: { set: string; collectorNumber: string }[]): Promise<Record<string, CardTemplate>>;
 }
 
 export interface AppOptions {
@@ -20,6 +23,8 @@ export interface AppOptions {
   setCacheMs?: number;
   /** The only set pools are opened from. */
   setCode?: string;
+  /** Exact booster collation for that set; without one, packs use the generic approximation. */
+  collation?: Collation;
 }
 
 const id = (bytes = 6) => crypto.randomBytes(bytes).toString('base64url');
@@ -43,7 +48,12 @@ function tokensMatch(a: string, b: string) {
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 }
 
-export function createApp({ db, cards, staticDir, setCacheMs = 7 * 24 * 3600 * 1000, setCode = 'trk' }: AppOptions) {
+export function createApp({ db, cards, staticDir, setCacheMs = 7 * 24 * 3600 * 1000, setCode = 'trk', collation }: AppOptions) {
+  // Cache key changes whenever the collation's card list changes.
+  const collationRefList = collation ? collationRefs(collation) : [];
+  const collationKey = collation
+    ? `collation:${crypto.createHash('sha1').update(JSON.stringify(collationRefList)).digest('hex').slice(0, 12)}`
+    : '';
   const app = express();
   app.use(express.json({ limit: '200kb' }));
 
@@ -146,9 +156,10 @@ export function createApp({ db, cards, staticDir, setCacheMs = 7 * 24 * 3600 * 1
       const packs = Number(packCount);
       if (!Number.isInteger(packs) || packs < 1 || packs > 12) throw new HttpError(400, 'Pack count must be 1–12');
       const set = await currentSet();
-      const setCards = await cached(set.code, () => cards.fetchSetCards(set.code));
       const basicLands = await cached(`basics:${set.code}`, () => cards.fetchBasics(set.code));
-      const pool = generatePool(setCards, 'play', packs);
+      const pool = collation
+        ? generateCollationPool(collation, await cached(collationKey, () => cards.fetchCards(collationRefList)), packs)
+        : generatePool(await cached(set.code, () => cards.fetchSetCards(set.code)), 'play', packs);
       const poolId = id();
       db.prepare(
         'INSERT INTO pools (id, set_code, set_name, booster_type, pack_count, created_by, created_at, cards, basic_lands) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
