@@ -4,7 +4,7 @@ import { api, ApiError } from '../api.ts';
 import { getIdentity } from '../identity.ts';
 import { COLORS, type Deck, type Pool, type PoolCard, type PoolWithDecks } from '../../../shared/types.ts';
 import { basicCard } from '../../../shared/layout.ts';
-import { comparePool, headToHead, type CardConsensus, type DeckAnalysis } from '../../../shared/analytics.ts';
+import { comparePool, headToHead, type DeckAnalysis } from '../../../shared/analytics.ts';
 import { CURVE_LABELS, curveBucket, isLand, GUILDS, MONO } from '../../../shared/cards.ts';
 import { CardName, CardTile } from '../components/Card.tsx';
 import { ColorDots, ManaCost } from '../components/Mana.tsx';
@@ -116,28 +116,6 @@ function HeadToHead({ analyses, meIdx }: { analyses: DeckAnalysis[]; meIdx: numb
   );
 }
 
-function Highlight({ title, hint, items }: { title: string; hint: string; items: CardConsensus[] }) {
-  return (
-    <div className="highlight panel">
-      <h3>{title}</h3>
-      <p className="muted small">{hint}</p>
-      {items.length ? (
-        <ul className="card-list">
-          {items.slice(0, 8).map((c) => (
-            <li key={c.name}>
-              <CardName card={c.card} />
-              <span className="muted small">{c.players.map((p) => p.playerName).join(', ')}</span>
-            </li>
-          ))}
-          {items.length > 8 && <li className="muted small">+{items.length - 8} more</li>}
-        </ul>
-      ) : (
-        <p className="muted small">None</p>
-      )}
-    </div>
-  );
-}
-
 export default function Results() {
   const { poolId = '' } = useParams();
   const me = getIdentity(poolId);
@@ -222,12 +200,6 @@ export default function Results() {
           ))}
         </div>
       </section>
-
-      {cmp.divisive.length > 0 && (
-        <section className="highlights">
-          <Highlight title="Most divisive" hint="Cards closest to a 50/50 split." items={cmp.divisive} />
-        </section>
-      )}
 
       {n > 1 && (
         <section className="panel">
